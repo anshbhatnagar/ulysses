@@ -113,9 +113,9 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
         print(Ngamma)
 
-        plt.plot(np.log(t1), ys[:,0], color='r', label=r'$N_N$')
-        plt.plot(np.log(t1), 1e6*ys[:,1], color='g', label=r'$N_{B-L}\times 10^{6}$')
-        plt.plot(np.log(t1), 1e9*self.ys[:,-1], color='b', label=r'$|\eta_B|\times 10^9$')
+        #plt.plot(np.log(t1), np.abs(ys[:,0]), color='r', label=r'$N_N$')
+        plt.plot(np.log(t1), np.log(np.abs(ys[:,1])), color='g', label=r'$N_{B-L}\times 10^{6}$')
+        #plt.plot(np.log(t1), self.ys[:,-1], color='b', label=r'$|\eta_B|\times 10^9$')
         plt.xlabel(r"$\ln(a)$", fontsize=16)
         plt.legend(loc='lower right', fontsize=16)
         plt.ylabel(r"$N_N$, $N_{B-L}$, $|\eta_B|$",  fontsize=16)
