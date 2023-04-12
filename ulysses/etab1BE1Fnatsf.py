@@ -14,65 +14,96 @@ import matplotlib.pyplot as plt
 import ulysses.numba as nb
 from ulysses.ulsbase import my_kn2, my_kn1
 
+import progressbar as pb
+
+
+relApprox = False
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 #             FLRW-Boltzmann Equations            #
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 
 
-def Jp(x):
+def Jp(x): #J+ function for energy density
     integrand = lambda z: z**2*np.sqrt(np.abs(z**2+x**2))/(1+np.exp(np.sqrt(np.abs(z**2+x**2))))
     return quad(integrand, 0, 50, epsabs=5e-3)[0]
 
-def Ip(x):
-    integrand = lambda z: z**2/(1+np.exp(np.sqrt(np.abs(z**2+x**2))))
+def dJpdx(x): #derivative of the J+ function
+    integrand = lambda z: -x*z**2*(-1+np.exp(np.sqrt(np.abs(z**2+x**2)))*(-1+np.sqrt(np.abs(z**2+x**2))))/((1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2*np.sqrt(np.abs(z**2+x**2)))
     return quad(integrand, 0, 50, epsabs=5e-3)[0]
 
-def Ipp(Th, M1):
-    return Th**3*Ip(M1/Th)
+def Kp(x): #K+ function for pressure
+    integrand = lambda z: z**4/(3*np.sqrt(np.abs(z**2+x**2))*(1+np.exp(np.sqrt(np.abs(z**2+x**2)))))
+    return quad(integrand, 0, 50, epsabs=5e-3)[0]
 
-def invIpp(y, M1):
-    f = lambda x, m: Ipp(x, m)+y
-    return fsolve(f, 400*M1, args=(M1))[0]
-
-def relrho(T,gN, M):
-    #return gN*Th**4*Jp(M/Th)/(2*np.pi**2)
-    return 7/8*np.pi**2/30*gN*T**4
-
-def relT(N,gN,M):
-    #return invIpp(2*np.pi**2*N/(a**3*gN),M)
-    return (4/3*N/zeta(3)*np.pi**2/gN)**1/3
-
+def dKpdx(x): #derivative of the K+ function
+    integrand = lambda z:  -x*z**4*(1+np.exp(np.sqrt(np.abs(z**2+x**2)))*(1+np.sqrt(np.abs(z**2+x**2))))/(3*(1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2*np.sqrt(np.abs(z**2+x**2))**3)
+    return quad(integrand, 0, 50, epsabs=5e-3)[0]
 
 
 #@jit
-def fast_RHS(y0, lna, M1, gst, gsts, gN, gNs, d, w1, epstt, epsmm, epsee, rnuRda_eq, GCF):
+def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq, GCF):
     nN      = y0[0] # RHN number density
     Tsm       = y0[1]  #standard model temperature
     Th = y0[2] #hot sector temperature
-    NBL = y0[3] # B-L asymmetry
-
-    # set previous timesteps derivatives
-    dTsmdlna_old = dTdlna[0]
-    dThdlna_old = dTdlna[1]
-    
+    NBL = y0[3] #B-L asymmetry
+    Q = y0[4] #total energy transferred between sectors
     
     Mpl = np.sqrt(1/(8 * np.pi * GCF)) #planck mass
-    rho = np.pi**2/30.*(gst)*Tsm**4+7/8*np.pi**2/30*gN*Th**4 # total comoving energy density
 
-    s = 2*np.pi/45*(gsts*Tsm**3+gNs*Th**3) # total comoving entropy density
+    #set energy density, pressure and derivatives for RHN assuming the relativistic approximation or using the full expressions
+    if relApprox:
+        rhoN = 7/8*np.pi**2/30.*gN*Th**4
+        drhoNdTh = 7/8*2*np.pi**2/15.*gN*Th**3
 
-    dssmdTsm = 2*np.pi/15*gsts*Tsm**2 
-    dsNdTh = 2*np.pi/15*gNs*Th**2
+        pN = 1/3*rhoN
+        dpNdTh=1/3*drhoNdTh
+    else:
+        rhoN = gN/(2*np.pi**2)*Th**4*Jp(M1/Th)
+        drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*Jp(M1/Th)-M1*dJpdx(M1/Th))
+
+        pN = gN/(2*np.pi**2)*Th**4*Kp(M1/Th)
+        dpNdTh=gN/(2*np.pi**2)*Th**2*(4*Th*Kp(M1/Th)-M1*dKpdx(M1/Th))
+
+    #sets entropy density and derivative for RHN
+    sN = (rhoN+pN)/Th
+    dsNdTh = (drhoNdTh+dpNdTh-sN)/Th 
+
+    #set energy density, pressure, and entropy density for standard model relatiivistic d.o.f.
+    rhoSM = np.pi**2/30.*gst*Tsm**4
+    drhoSMdTsm = 2*np.pi**2/15.*gst*Tsm**3
+
+    pSM = 1/3*rhoSM
+    dpSMdTsm = 1/3*drhoSMdTsm
+
+    sSM=(rhoSM+pSM)/Tsm
+    dsSMdTsm = (drhoSMdTsm+dpSMdTsm-sSM)/Tsm
+
+    #set total energy density, pressure and entropy density for SM
+    rho = rhoSM + rhoN
+
+    p = pSM + pN
+
+    s = sSM+sN
 
     H            =      np.sqrt(rho/3.)/Mpl #Hubble parameter
 
-    dnNdlna      =    -(nN -  rnuRda_eq) * d/(H) 
-    dTdlna[0] = -(30*rho/(np.pi**2*gst)+gN/gst*(Th**3)*dThdlna_old)/Tsm**3
-    dTdlna[1] = -(dssmdTsm*dTsmdlna_old+3*s)/dsNdTh
-    dNBLlna        =     -(epstt + epsmm + epsee) * dnNdlna -  (w1/(H)) * NBL
     
-    return [dnNdlna, dTdlna[0], dTdlna[1], dNBLlna]
+    dQdlna = nN*d*M1/H #set energy transfer rate
+
+    denom = dsNdTh*(1.0-(drhoNdTh*dsSMdTsm)/(drhoSMdTsm*dsNdTh)) #denominator for Th derivative
+
+    dnNdlna      =    -nN*d/H -  (nN- rnuRda_eq)*invd/H #RHN number density BE
+
+    dThdlna = (np.exp(-3*lna)*(1/Tsm-1/Th)*dQdlna+dsSMdTsm/drhoSMdTsm*(3*(rho+p))-3*s)/denom #hot sector temperature derivative
+
+    dTsmdlna = -(3*(rho+p)+drhoNdTh*dThdlna)/drhoSMdTsm #SM temperature derivative
+    
+    dNBLdlna        =     -eps * dnNdlna -  (w1/(H)) * NBL #B-L asymmetry derivative
+
+    pbar.update((lna/lnarange)*100)
+    
+    return [dnNdlna, dTsmdlna, dThdlna, dNBLdlna, dQdlna]
 
 class EtaB_1BE1Fsf(ulysses.ULSBase):
     """
@@ -125,14 +156,14 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         zsm             = self.M1/Tsm
         zh = self.M1/Th
 
-        kn2 = my_kn2(zh)
-        _d       = np.real(self.Gamma1* my_kn1(zh) / kn2)
-        _w1      = _d * 0.25 * kn2 * zsm**2
+        _d       = np.real(self.Gamma1* my_kn1(zh) / my_kn2(zh)) #decay rate thermal averaged with hot sector
+        _invd = np.real(self.Gamma1* my_kn1(zsm) / my_kn2(zsm)) #decay rate thermal averaged with SM
+        _w1      = _invd * 0.25 * my_kn2(zsm) * zsm**2 #washout rate
         nN_eq     = self.N1Eq(zsm) #equilibrium number density of neutrinos
 
-        print(lna)
+        eps = (epstt + epsmm + epsee)
         
-        return fast_RHS(y0, lna, self.M1, gst, self.ipol_gstarS(Tsm), self.gN, self.gN, _d, _w1,  epstt, epsmm, epsee, nN_eq, self.GCF)
+        return fast_RHS(y0, lna, self.M1, gst, self.ipol_gstarS(Tsm), self.ipol_dgstarSdT(Tsm), self.gN, _d, _invd, _w1,  eps, nN_eq, self.GCF)
 
 
     @property
@@ -141,26 +172,32 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         epstt = np.real(self.epsilon1ab(2,2))
         epsmm = np.real(self.epsilon1ab(1,1))
         epsee = np.real(self.epsilon1ab(0,0))
-        kappa = 1.06  # initial ratio Th/Tsm
-        self.gN=2. #RHN relativistic degrees of freedom
+        kappa = 2  # initial ratio Th/Tsm
+        self.gN=7/8*2. #RHN relativistic degrees of freedom
         Tsm      = 100. * self.M1 # initial temp 100x greater than mass of N1
         Th = kappa*Tsm
 
+        #define initial and final ln(a)
         lnain = 0.
         lnaf = 10.
+        global lnarange
+        lnarange=lnaf-lnain
 
-        global dTdlna
-        dTdlna = [-Tsm, -Th] #global variable to store previous timesteps dTda
+        nN_int=3./4.*zeta(3)/(np.pi**2)*self.gN*Th**3 #initial RHN number density at temperature Th
 
         rRadi   = np.pi**2 * self.ipol_gstar(Tsm) / 30. * Tsm**4 # initial radiation domination rho_RAD = pi^2* gstar(T[0])/30*T^4
-        y0      = [3./4.*zeta(3)/(np.pi**2)*self.gN*Th**3,Tsm,Th, 0.] #initial array
+        y0      = [nN_int,Tsm,Th, 0., 0.] #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * Tsm**3
         params  = [Th, Tsm, epstt, epsmm, epsee]
         
         lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
 
+        global pbar
+        pbar=pb.ProgressBar().start()
 
-        ys = solve_ivp(self.RHS, [lnain, lnaf], y0, method='DOP853', args = params)
+        ys = solve_ivp(self.RHS, [lnain, lnaf], y0, method='Radau', args = params) #solves BEs
+
+        pbar.finish()
 
         # functions for converting to etaB using the solution to find temp
         T           = ys.y[1]
@@ -184,11 +221,15 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         etab = coeffsph*( ys.y[3])*nphi/Ngamma
 
         plt.plot(lnsf, ys.y[2]/ys.y[1], color='r', label=r'$\kappa$')
-        plt.plot(lnsf, ys.y[0]*1e-47, color='g', label=r'$N_N\times 10^{47}$')
-        plt.plot(lnsf, etab*1e-39, color='b', label=r'$|\eta_B|\times 10^{-39}$')
+        plt.plot(lnsf, ys.y[0]*1e-48, color='g', label=r'$N_N\times 10^{48}$')
+        plt.plot(lnsf, etab*1e-39, color='b', label=r'$|\eta_B|\times 10^{39}$')
+        #plt.plot(lnsf, np.abs(ys.y[4]), color='b', label=r'$Q$')
+        #plt.plot(lnsf, np.log(ys.y[1]), color='b', label=r'$T_{SM}$')
+        #plt.plot(lnsf, np.log(ys.y[2]), color='r', label=r'$T_H$')
         plt.xlabel(r"$\ln(a)$", fontsize=16)
         plt.legend(loc='upper right', fontsize=16)
         plt.ylabel(r"$N_N$, $\kappa$, $|\eta_B|$",  fontsize=16)
         plt.show()
 
-        return ys.y[-1][-1]
+
+        return etab[-1]

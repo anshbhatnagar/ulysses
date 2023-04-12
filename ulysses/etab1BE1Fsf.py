@@ -17,7 +17,9 @@ def fast_RHS(y0, a, Tp, gst, rRADi, ain, d, w1, epstt, epsmm, epsee, rnuRda_eq, 
     NBL       = y0[1] # B-L asymmetry
     
     Mpl = np.sqrt(1/(8 * np.pi * GCF))
-    rho = np.pi**2/30.*(gst)*Tp**4
+    #rho = np.pi**2/30.*(gst)*Tp**4
+
+    rho = np.pi**2/30.*(gst*Tsm**4+gN*Th**4)
     H            =      np.sqrt(rho/3.)/Mpl #Hubble parameter
     expression1  =      (rnuR -  rnuRda_eq) * d/(a*H)
     drnuRda      =    - expression1
