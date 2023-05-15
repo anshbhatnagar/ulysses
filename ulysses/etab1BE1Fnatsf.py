@@ -23,6 +23,27 @@ relApprox = False
 #             FLRW-Boltzmann Equations            #
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 
+def Ip(x):
+    integrand = lambda z: z**2/(1+np.exp(np.sqrt(np.abs(z**2+x**2))))
+    return quad(integrand, 0, 50, epsabs=5e-3)[0]
+
+def dIpdx(x):
+    integrand = lambda z: -x*z**2*np.exp(np.sqrt(np.abs(z**2+x**2)))/(np.sqrt(np.abs(z**2+x**2))*(1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2)
+    return quad(integrand, 0, 50, epsabs=5e-3)[0]
+
+def Ipp(Th,zh):
+    return Th**3*Ip(zh)
+
+def IppRoot(Th, MN, x):
+    return Ipp(Th,MN/Th)-x
+
+def invIpp(x, MN):
+    return fsolve(IppRoot,200*MN,args=(MN,x))
+
+def dinvIppdx(x, MN):
+    delta=x/1000
+    diff = invIpp(x+delta,MN)-invIpp(x,MN)
+    return diff/delta
 
 def Jp(x): #J+ function for energy density
     integrand = lambda z: z**2*np.sqrt(np.abs(z**2+x**2))/(1+np.exp(np.sqrt(np.abs(z**2+x**2))))
@@ -51,6 +72,8 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq,
     
     Mpl = np.sqrt(1/(8 * np.pi * GCF)) #planck mass
 
+    zh=M1/Th
+
     #set energy density, pressure and derivatives for RHN assuming the relativistic approximation or using the full expressions
     if relApprox:
         rhoN = 7/8*np.pi**2/30.*gN*Th**4
@@ -59,11 +82,11 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq,
         pN = 1/3*rhoN
         dpNdTh=1/3*drhoNdTh
     else:
-        rhoN = gN/(2*np.pi**2)*Th**4*Jp(M1/Th)
-        drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*Jp(M1/Th)-M1*dJpdx(M1/Th))
+        rhoN = gN/(2*np.pi**2)*Th**4*Jp(zh)
+        drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*Jp(zh)-M1*dJpdx(zh))
 
-        pN = gN/(2*np.pi**2)*Th**4*Kp(M1/Th)
-        dpNdTh=gN/(2*np.pi**2)*Th**2*(4*Th*Kp(M1/Th)-M1*dKpdx(M1/Th))
+        pN = gN/(2*np.pi**2)*Th**4*Kp(zh)
+        dpNdTh=gN/(2*np.pi**2)*Th**2*(4*Th*Kp(zh)-M1*dKpdx(zh))
 
     #sets entropy density and derivative for RHN
     sN = (rhoN+pN)/Th
@@ -91,11 +114,21 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq,
     
     dQdlna = nN*d*M1/H #set energy transfer rate
 
-    denom = dsNdTh*(1.0-(drhoNdTh*dsSMdTsm)/(drhoSMdTsm*dsNdTh)) #denominator for Th derivative
+    #denom = dsNdTh*(1.0-(drhoNdTh*dsSMdTsm)/(drhoSMdTsm*dsNdTh)) #denominator for Th derivative
 
-    dnNdlna      =    -nN*d/H -  (nN- rnuRda_eq)*invd/H #RHN number density BE
+    dnNdlna      =    -nN*d/H +  (rnuRda_eq)*invd/H #RHN number density BE
 
-    dThdlna = (np.exp(-3*lna)*(1/Tsm-1/Th)*dQdlna+dsSMdTsm/drhoSMdTsm*(3*(rho+p))-3*s)/denom #hot sector temperature derivative
+    x=np.exp(-3*lna)*2*np.pi**2*nN/gN
+
+    dinvIpp=dinvIppdx(x,M1)
+
+    pThpnN = dinvIpp*np.exp(-3*lna)*2*np.pi**2/gN
+    
+    pThplna=-dinvIpp*np.exp(-3*lna)*6*np.pi**2*nN/gN
+
+    dThdlna = pThpnN*dnNdlna+pThplna
+
+    #dThdlna = (np.exp(-3*lna)*(1/Tsm-1/Th)*dQdlna+dsSMdTsm/drhoSMdTsm*(3*(rho+p))-3*s)/denom #hot sector temperature derivative
 
     dTsmdlna = -(3*(rho+p)+drhoNdTh*dThdlna)/drhoSMdTsm #SM temperature derivative
     
@@ -224,7 +257,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         plt.plot(lnsf, ys.y[0]*1e-48, color='g', label=r'$N_N\times 10^{48}$')
         plt.plot(lnsf, etab*1e-39, color='b', label=r'$|\eta_B|\times 10^{39}$')
         #plt.plot(lnsf, np.abs(ys.y[4]), color='b', label=r'$Q$')
-        #plt.plot(lnsf, np.log(ys.y[1]), color='b', label=r'$T_{SM}$')
+        #plt.plot(lnsf, ys.y[1]*np.exp(lnsf), color='b', label=r'$T_{SM}$')
         #plt.plot(lnsf, np.log(ys.y[2]), color='r', label=r'$T_H$')
         plt.xlabel(r"$\ln(a)$", fontsize=16)
         plt.legend(loc='upper right', fontsize=16)
