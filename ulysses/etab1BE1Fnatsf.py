@@ -34,16 +34,17 @@ def dIpdx(x):
 def Ipp(Th,zh):
     return Th**3*Ip(zh)
 
+def dIppdTh(Th,MN):
+    return 3*Th**2*Ip(MN/Th)-MN*Th*dIpdx(MN/Th)
+
 def IppRoot(Th, MN, x):
     return Ipp(Th,MN/Th)-x
 
-def invIpp(x, MN):
-    return fsolve(IppRoot,200*MN,args=(MN,x))
+def invIpp(x, MN, guess):
+    return fsolve(IppRoot,guess,args=(MN,x))[0]
 
-def dinvIppdx(x, MN):
-    delta=x/1000
-    diff = invIpp(x+delta,MN)-invIpp(x,MN)
-    return diff/delta
+def dinvIppdx(x, MN, guess):
+    return 1/dIppdTh(invIpp(x,MN,guess),MN)
 
 def Jp(x): #J+ function for energy density
     integrand = lambda z: z**2*np.sqrt(np.abs(z**2+x**2))/(1+np.exp(np.sqrt(np.abs(z**2+x**2))))
@@ -63,7 +64,7 @@ def dKpdx(x): #derivative of the K+ function
 
 
 #@jit
-def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq, GCF):
+def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq, GCF, V):
     nN      = y0[0] # RHN number density
     Tsm       = y0[1]  #standard model temperature
     Th = y0[2] #hot sector temperature
@@ -110,7 +111,6 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq,
     s = sSM+sN
 
     H            =      np.sqrt(rho/3.)/Mpl #Hubble parameter
-
     
     dQdlna = nN*d*M1/H #set energy transfer rate
 
@@ -118,15 +118,19 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq,
 
     dnNdlna      =    -nN*d/H +  (rnuRda_eq)*invd/H #RHN number density BE
 
-    x=np.exp(-3*lna)*2*np.pi**2*nN/gN
+    x=np.exp(-3*lna)*2*np.pi**2*nN/(gN*V) #parameter for inversion
 
-    dinvIpp=dinvIppdx(x,M1)
+    if x*V<10**(-10): #checks if x*V is close to zero, so that number density and temperature relation won't be used
+        dThdlna=-Th #evolve the temperature as a relativistic relic
 
-    pThpnN = dinvIpp*np.exp(-3*lna)*2*np.pi**2/gN
-    
-    pThplna=-dinvIpp*np.exp(-3*lna)*6*np.pi**2*nN/gN
+    else: #otherwise use the inversion of the number density/temperature relation
+        dinvIpp=dinvIppdx(x,M1,Th)
 
-    dThdlna = pThpnN*dnNdlna+pThplna
+        pThpnN = dinvIpp*np.exp(-3*lna)*2*np.pi**2/(gN*V)
+
+        pThplna=-dinvIpp*np.exp(-3*lna)*6*np.pi**2*nN/(gN*V)
+
+        dThdlna = pThpnN*dnNdlna+pThplna
 
     #dThdlna = (np.exp(-3*lna)*(1/Tsm-1/Th)*dQdlna+dsSMdTsm/drhoSMdTsm*(3*(rho+p))-3*s)/denom #hot sector temperature derivative
 
@@ -181,7 +185,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
     def flavourlabels(self): return ["$T$", "$NBL$"]
 
-    def RHS(self, lna, y0, Th, Tsm, epstt, epsmm, epsee):
+    def RHS(self, lna, y0, Th, Tsm, epstt, epsmm, epsee, V):
         Th = y0[2] #previous Th
         Tsm = y0[1] #previous Tsm
 
@@ -196,7 +200,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
         eps = (epstt + epsmm + epsee)
         
-        return fast_RHS(y0, lna, self.M1, gst, self.ipol_gstarS(Tsm), self.ipol_dgstarSdT(Tsm), self.gN, _d, _invd, _w1,  eps, nN_eq, self.GCF)
+        return fast_RHS(y0, lna, self.M1, gst, self.ipol_gstarS(Tsm), self.ipol_dgstarSdT(Tsm), self.gN, _d, _invd, _w1,  eps, nN_eq, self.GCF, V)
 
 
     @property
@@ -205,30 +209,36 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         epstt = np.real(self.epsilon1ab(2,2))
         epsmm = np.real(self.epsilon1ab(1,1))
         epsee = np.real(self.epsilon1ab(0,0))
+
+        ggamma      = 2.
+
         kappa = 2  # initial ratio Th/Tsm
         self.gN=7/8*2. #RHN relativistic degrees of freedom
         Tsm      = 100. * self.M1 # initial temp 100x greater than mass of N1
         Th = kappa*Tsm
 
+        V = np.pi**2/(Tsm**3*zeta(3)*ggamma) #volume factor to normalise the number density, keeping it consistent with the equilibrium number density
+
         #define initial and final ln(a)
         lnain = 0.
-        lnaf = 10.
+        lnaf = 2*np.log(Th/self.M1)
         global lnarange
         lnarange=lnaf-lnain
 
-        nN_int=3./4.*zeta(3)/(np.pi**2)*self.gN*Th**3 #initial RHN number density at temperature Th
+        nN_int=3./4.*zeta(3)/(np.pi**2)*self.gN*Th**3*V #initial RHN number density at temperature Th
+
 
         rRadi   = np.pi**2 * self.ipol_gstar(Tsm) / 30. * Tsm**4 # initial radiation domination rho_RAD = pi^2* gstar(T[0])/30*T^4
         y0      = [nN_int,Tsm,Th, 0., 0.] #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * Tsm**3
-        params  = [Th, Tsm, epstt, epsmm, epsee]
+        params  = [Th, Tsm, epstt, epsmm, epsee, V]
         
         lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
 
         global pbar
         pbar=pb.ProgressBar().start()
 
-        ys = solve_ivp(self.RHS, [lnain, lnaf], y0, method='Radau', args = params) #solves BEs
+        ys = solve_ivp(self.RHS, [lnain, lnaf], y0, method='BDF', args = params) #solves BEs
 
         pbar.finish()
 
@@ -239,7 +249,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         gstarSoff = self.ipol_gstarS(T[-1])  # d.o.f. at the end of leptogenesis
         SMspl       = 28./79.
         zeta3       = zeta(3)
-        ggamma      = 2.
+        
         coeffNgamma = ggamma*zeta3/np.pi**2
 
         Ngamma      = coeffNgamma*(np.exp(lnsf)*T)**3
@@ -254,10 +264,10 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         etab = coeffsph*( ys.y[3])*nphi/Ngamma
 
         plt.plot(lnsf, ys.y[2]/ys.y[1], color='r', label=r'$\kappa$')
-        plt.plot(lnsf, ys.y[0]*1e-48, color='g', label=r'$N_N\times 10^{48}$')
-        plt.plot(lnsf, etab*1e-39, color='b', label=r'$|\eta_B|\times 10^{39}$')
+        plt.plot(lnsf, ys.y[0], color='g', label=r'$N_N$')
+        plt.plot(lnsf, etab*1e8, color='b', label=r'$|\eta_B|\times 10^{-8}$')
         #plt.plot(lnsf, np.abs(ys.y[4]), color='b', label=r'$Q$')
-        #plt.plot(lnsf, ys.y[1]*np.exp(lnsf), color='b', label=r'$T_{SM}$')
+        #plt.plot(lnsf, np.log(ys.y[1]), color='b', label=r'$T_{SM}$')
         #plt.plot(lnsf, np.log(ys.y[2]), color='r', label=r'$T_H$')
         plt.xlabel(r"$\ln(a)$", fontsize=16)
         plt.legend(loc='upper right', fontsize=16)

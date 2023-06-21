@@ -19,7 +19,7 @@ def fast_RHS(y0, a, Tp, gst, rRADi, ain, d, w1, epstt, epsmm, epsee, rnuRda_eq, 
     Mpl = np.sqrt(1/(8 * np.pi * GCF))
     #rho = np.pi**2/30.*(gst)*Tp**4
 
-    rho = np.pi**2/30.*(gst*Tsm**4+gN*Th**4)
+    rho = np.pi**2/30.*(gst*Tp**4)
     H            =      np.sqrt(rho/3.)/Mpl #Hubble parameter
     expression1  =      (rnuR -  rnuRda_eq) * d/(a*H)
     drnuRda      =    - expression1
@@ -89,7 +89,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         self.Ti      = 100 * self.M1 # initial temp 100 greater than mass N1
         Tp = self.Ti
         rRadi   = np.pi**2 * self.ipol_gstar(Tp) / 30. * Tp**4 # initial radiation domination rho_RAD = pi^2* gstar(T[0])/30*T^4
-        y0      = np.array([0., 0.])
+        y0      = np.array([0.75, 0.])
         nphi    = (2.*zeta(3)/np.pi**2) * Tp**3
         params  = np.array([Tp, epstt, epsmm, epsee, np.real(rRadi), 1.])
         af = 100000.
