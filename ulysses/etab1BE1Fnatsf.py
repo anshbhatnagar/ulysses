@@ -14,10 +14,12 @@ import matplotlib.pyplot as plt
 import ulysses.numba as nb
 from ulysses.ulsbase import my_kn2, my_kn1
 
+import ast
+
 import progressbar as pb
 
-
 relApprox = False
+nonRelApprox = True
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 #             FLRW-Boltzmann Equations            #
@@ -82,6 +84,14 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq,
 
         pN = 1/3*rhoN
         dpNdTh=1/3*drhoNdTh
+    elif nonRelApprox and zh>100:
+        dnNdTh=gN*(M1/(2*np.pi))**(3/2)*np.exp(-zh)*(3/2*np.sqrt(Th)+M1/np.sqrt(Th))
+
+        rhoN = M1*nN
+        drhoNdTh = M1*dnNdTh
+
+        pN = nN*Th
+        dpNdTh=nN
     else:
         rhoN = gN/(2*np.pi**2)*Th**4*Jp(zh)
         drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*Jp(zh)-M1*dJpdx(zh))
@@ -151,7 +161,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
+        print(self.pnames)
         self.GCF   = 6.71862e-39      # Gravitational constant in GeV^-2
 
         #-------------------------------------#
@@ -204,7 +214,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
 
     @property
-    def EtaB(self):
+    def EtaB(self): #kappa is initial ratio Th/Tsm
         #Define fixed quantities for BEs
         epstt = np.real(self.epsilon1ab(2,2))
         epsmm = np.real(self.epsilon1ab(1,1))
@@ -212,10 +222,9 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
         ggamma      = 2.
 
-        kappa = 2  # initial ratio Th/Tsm
         self.gN=7/8*2. #RHN relativistic degrees of freedom
         Tsm      = 100. * self.M1 # initial temp 100x greater than mass of N1
-        Th = kappa*Tsm
+        Th = self.kappa*Tsm
 
         V = np.pi**2/(Tsm**3*zeta(3)*ggamma) #volume factor to normalise the number density, keeping it consistent with the equilibrium number density
 
@@ -226,7 +235,6 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         lnarange=lnaf-lnain
 
         nN_int=3./4.*zeta(3)/(np.pi**2)*self.gN*Th**3*V #initial RHN number density at temperature Th
-
 
         rRadi   = np.pi**2 * self.ipol_gstar(Tsm) / 30. * Tsm**4 # initial radiation domination rho_RAD = pi^2* gstar(T[0])/30*T^4
         y0      = [nN_int,Tsm,Th, 0., 0.] #initial array
@@ -263,16 +271,37 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         #self.ys[:,3]=ys[:,2]
         etab = coeffsph*( ys.y[3])*nphi/Ngamma
 
-        plt.plot(lnsf, ys.y[2]/ys.y[1], color='r', label=r'$\kappa$')
-        plt.plot(lnsf, ys.y[0], color='g', label=r'$N_N$')
-        plt.plot(lnsf, etab*1e8, color='b', label=r'$|\eta_B|\times 10^{-8}$')
+        #plt.plot(lnsf, ys.y[2]/ys.y[1], color='r', label=r'$\kappa$')
+        #plt.plot(lnsf, ys.y[0], color='g', label=r'$N_N$')
+        #plt.plot(lnsf, etab*1e8, color='b', label=r'$|\eta_B|\times 10^{-8}$')
         #plt.plot(lnsf, np.abs(ys.y[4]), color='b', label=r'$Q$')
         #plt.plot(lnsf, np.log(ys.y[1]), color='b', label=r'$T_{SM}$')
         #plt.plot(lnsf, np.log(ys.y[2]), color='r', label=r'$T_H$')
-        plt.xlabel(r"$\ln(a)$", fontsize=16)
-        plt.legend(loc='upper right', fontsize=16)
-        plt.ylabel(r"$N_N$, $\kappa$, $|\eta_B|$",  fontsize=16)
-        plt.show()
+        #plt.xlabel(r"$\ln(a)$", fontsize=16)
+        #plt.legend(loc='upper right', fontsize=16)
+        #plt.ylabel(r"$N_N$, $\kappa$, $|\eta_B|$",  fontsize=16)
+        #plt.show()
 
 
         return etab[-1]
+
+
+def main():
+    kappa = np.linspace(1, 10, num=50, endpoint=True)
+
+    model=EtaB_1BE1Fsf()
+
+    with open("../examples/1N1F.dat", "r") as data:
+        paramdict = ast.literal_eval(data.read())
+
+    etab = model(paramdict, kappa)
+
+    plt.plot(kappa, etab, color='r', label=r'$\eta_B$')
+    plt.xlabel(r"$\kappa$", fontsize=16)
+    plt.legend(loc='upper right', fontsize=16)
+    plt.ylabel(r"$|\eta_B|$",  fontsize=16)
+    plt.show()
+
+
+#if __name__ == "__main__":
+#    main()

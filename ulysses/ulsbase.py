@@ -92,7 +92,7 @@ class ULSBase(object):
 
         self.isCasasIbarrra = True
         self._manualh = np.zeros((3,3), dtype=np.complex128)
-        self.pnames = ['m', 'M1', 'M2', 'M3', 'delta', 'a21', 'a31', 'x1', 'x2', 'x3', 'y1', 'y2', 'y3', 't12', 't13', 't23']
+        self.pnames = ['m', 'M1', 'M2', 'M3', 'delta', 'a21', 'a31', 'x1', 'x2', 'x3', 'y1', 'y2', 'y3', 't12', 't13', 't23', 'kappa']
         self.evolname="z"
 
 
@@ -231,6 +231,7 @@ class ULSBase(object):
             self.M1       = 10**pdict['M1']
             self.M2       = 10**pdict['M2']
             self.M3       = 10**pdict['M3']
+            self.kappa    = pdict['kappa']
         else:
             self.M1       = 10**pdict['M1']
             self.M2       = 10**pdict['M2']
@@ -245,6 +246,7 @@ class ULSBase(object):
             self._manualh[2][0] = cmath.rect(pdict["Y31_mag"], pdict["Y31_phs"])
             self._manualh[2][1] = cmath.rect(pdict["Y32_mag"], pdict["Y32_phs"])
             self._manualh[2][2] = cmath.rect(pdict["Y33_mag"], pdict["Y33_phs"])
+            self.kappa    = pdict['kappa']
 
 
 
