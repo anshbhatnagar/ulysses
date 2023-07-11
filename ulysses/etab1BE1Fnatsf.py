@@ -7,6 +7,7 @@ from scipy.integrate import odeint
 from scipy.integrate import solve_ivp
 from scipy.special import zeta
 from scipy.special import k1
+from scipy.special import kn
 from scipy.optimize import fsolve
 from scipy.integrate import quad
 from ulysses.numba import jit
@@ -20,6 +21,7 @@ import progressbar as pb
 
 relApprox = False
 nonRelApprox = True
+showPlotBool=False
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 #             FLRW-Boltzmann Equations            #
@@ -63,6 +65,20 @@ def Kp(x): #K+ function for pressure
 def dKpdx(x): #derivative of the K+ function
     integrand = lambda z:  -x*z**4*(1+np.exp(np.sqrt(np.abs(z**2+x**2)))*(1+np.sqrt(np.abs(z**2+x**2))))/(3*(1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2*np.sqrt(np.abs(z**2+x**2))**3)
     return quad(integrand, 0, 50, epsabs=5e-3)[0]
+
+def showPlot(lnsf, ys, etab, nN_int, washout, source):
+    #plt.plot(lnsf, ys.y[2]/ys.y[1], color='r', label=r'$\kappa$')
+    #plt.plot(lnsf, ys.y[0]/nN_int, color='g', label=r'$N_N$')
+    #plt.plot(lnsf, etab*1e10, color='b', label=r'$|\eta_B|\times 10^{10}$')
+    plt.plot(lnsf, washout/source[0], label=r'$w$')
+    plt.plot(lnsf, source/source[0], label=r'$s$')
+    #plt.plot(lnsf, np.abs(ys.y[4]), color='b', label=r'$Q$')
+    #plt.plot(lnsf, np.log(ys.y[1]), color='b', label=r'$T_{SM}$')
+    #plt.plot(lnsf, np.log(ys.y[2]), color='r', label=r'$T_H$')
+    plt.xlabel(r"$\ln(a)$", fontsize=16)
+    plt.legend(loc='upper right', fontsize=16)
+    plt.ylabel(r"$N_N$, $\kappa$, $|\eta_B|$",  fontsize=16)
+    plt.show()
 
 
 #@jit
@@ -130,7 +146,7 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq,
 
     x=np.exp(-3*lna)*2*np.pi**2*nN/(gN*V) #parameter for inversion
 
-    if x*V<10**(-10): #checks if x*V is close to zero, so that number density and temperature relation won't be used
+    if x*V<10**(-10): #checks if energy transfer has levelled off and x*V is close to zero, so that number density and temperature relation won't be used
         dThdlna=-Th #evolve the temperature as a relativistic relic
 
     else: #otherwise use the inversion of the number density/temperature relation
@@ -148,7 +164,7 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq,
     
     dNBLdlna        =     -eps * dnNdlna -  (w1/(H)) * NBL #B-L asymmetry derivative
 
-    pbar.update((lna/lnarange)*100)
+    #pbar.update((lna/lnarange)*100)
     
     return [dnNdlna, dTsmdlna, dThdlna, dNBLdlna, dQdlna]
 
@@ -161,7 +177,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        print(self.pnames)
+        self.pnames=['m', 'M1', 'M2', 'M3', 'delta', 'a21', 'a31', 'x1', 'x2', 'x3', 'y1', 'y2', 'y3', 't12', 't13', 't23', 'kappa']
         self.GCF   = 6.71862e-39      # Gravitational constant in GeV^-2
 
         #-------------------------------------#
@@ -212,6 +228,19 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         
         return fast_RHS(y0, lna, self.M1, gst, self.ipol_gstarS(Tsm), self.ipol_dgstarSdT(Tsm), self.gN, _d, _invd, _w1,  eps, nN_eq, self.GCF, V)
 
+    def __call__(self, x):
+        r"""
+        Operator that returns EtaB for a given parameter point.
+
+        :Arguments:
+            * *x* (``dict``) --
+              parameter dictionary
+
+        NOTE --- this operator is intended to be used with derived classes where EtaB is implemented
+        """
+        self.setParams(x)
+        self.kappa=x['kappa']
+        return self.EtaB
 
     @property
     def EtaB(self): #kappa is initial ratio Th/Tsm
@@ -244,11 +273,11 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
 
         global pbar
-        pbar=pb.ProgressBar().start()
+        #pbar=pb.ProgressBar().start()
 
         ys = solve_ivp(self.RHS, [lnain, lnaf], y0, method='BDF', args = params) #solves BEs
 
-        pbar.finish()
+        #pbar.finish()
 
         # functions for converting to etaB using the solution to find temp
         T           = ys.y[1]
@@ -271,37 +300,25 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         #self.ys[:,3]=ys[:,2]
         etab = coeffsph*( ys.y[3])*nphi/Ngamma
 
-        #plt.plot(lnsf, ys.y[2]/ys.y[1], color='r', label=r'$\kappa$')
-        #plt.plot(lnsf, ys.y[0], color='g', label=r'$N_N$')
-        #plt.plot(lnsf, etab*1e8, color='b', label=r'$|\eta_B|\times 10^{-8}$')
-        #plt.plot(lnsf, np.abs(ys.y[4]), color='b', label=r'$Q$')
-        #plt.plot(lnsf, np.log(ys.y[1]), color='b', label=r'$T_{SM}$')
-        #plt.plot(lnsf, np.log(ys.y[2]), color='r', label=r'$T_H$')
-        #plt.xlabel(r"$\ln(a)$", fontsize=16)
-        #plt.legend(loc='upper right', fontsize=16)
-        #plt.ylabel(r"$N_N$, $\kappa$, $|\eta_B|$",  fontsize=16)
-        #plt.show()
+        if showPlotBool:
+            zsm=self.M1/T
 
+            zh=self.M1/ys.y[2]
+
+            d       = np.real(self.Gamma1* kn(1,zh) / kn(2,zh)) #decay rate thermal averaged with hot sector
+            invd = np.real(self.Gamma1* kn(1,zsm) / kn(2,zsm)) #decay rate thermal averaged with SM
+            invd[np.isnan(invd)] = 0
+            w=invd * 0.25 * kn(2,zsm) * zsm**2
+
+            eps=(epstt + epsmm + epsee)
+
+            neq=3/8*zsm**2*kn(2,zsm)
+
+            washout= np.abs(w * ys.y[3])
+            
+            source=np.abs(eps *np.abs(-ys.y[0]*d +  neq*invd))
+
+            print(np.abs(self.k1))
+            showPlot(lnsf, ys, etab, nN_int, washout, source)
 
         return etab[-1]
-
-
-def main():
-    kappa = np.linspace(1, 10, num=50, endpoint=True)
-
-    model=EtaB_1BE1Fsf()
-
-    with open("../examples/1N1F.dat", "r") as data:
-        paramdict = ast.literal_eval(data.read())
-
-    etab = model(paramdict, kappa)
-
-    plt.plot(kappa, etab, color='r', label=r'$\eta_B$')
-    plt.xlabel(r"$\kappa$", fontsize=16)
-    plt.legend(loc='upper right', fontsize=16)
-    plt.ylabel(r"$|\eta_B|$",  fontsize=16)
-    plt.show()
-
-
-#if __name__ == "__main__":
-#    main()

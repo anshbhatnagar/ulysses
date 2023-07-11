@@ -86,13 +86,17 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         epstt = np.real(self.epsilon1ab(2,2))
         epsmm = np.real(self.epsilon1ab(1,1))
         epsee = np.real(self.epsilon1ab(0,0))
+        ggamma      = 2.
+        self.gN=7/8*2.
         self.Ti      = 100 * self.M1 # initial temp 100 greater than mass N1
         Tp = self.Ti
+        V = np.pi**2/(Tp**3*zeta(3)*ggamma)
+        nN_int=3./4.*zeta(3)/(np.pi**2)*self.gN*Tp**3*V
         rRadi   = np.pi**2 * self.ipol_gstar(Tp) / 30. * Tp**4 # initial radiation domination rho_RAD = pi^2* gstar(T[0])/30*T^4
-        y0      = np.array([0.75, 0.])
+        y0      = np.array([nN_int, 0.])
         nphi    = (2.*zeta(3)/np.pi**2) * Tp**3
         params  = np.array([Tp, epstt, epsmm, epsee, np.real(rRadi), 1.])
-        af = 100000.
+        af = np.exp(2*np.log(Tp/self.M1))
         t1 = np.linspace(1., af, num=10000, endpoint=True)
 
         # solve equation
@@ -103,7 +107,6 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         gstarSoff = self.ipol_gstarS(T[-1])  # d.o.f. at the end of leptogenesis
         SMspl       = 28./79.
         zeta3       = zeta(3)
-        ggamma      = 2.
         coeffNgamma = ggamma*zeta3/np.pi**2
         Ngamma      = coeffNgamma*(t1*T)**3
         coeffsph    =  SMspl * gstarSrec/gstarSoff
@@ -116,11 +119,11 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         print(Ngamma)
 
         #plt.plot(np.log(t1), np.abs(ys[:,0]), color='r', label=r'$N_N$')
-        plt.plot(np.log(t1), np.log(np.abs(ys[:,1])), color='g', label=r'$N_{B-L}\times 10^{6}$')
+        #plt.plot(np.log(t1), np.log(np.abs(ys[:,1])), color='g', label=r'$N_{B-L}\times 10^{6}$')
         #plt.plot(np.log(t1), self.ys[:,-1], color='b', label=r'$|\eta_B|\times 10^9$')
-        plt.xlabel(r"$\ln(a)$", fontsize=16)
-        plt.legend(loc='lower right', fontsize=16)
-        plt.ylabel(r"$N_N$, $N_{B-L}$, $|\eta_B|$",  fontsize=16)
-        plt.show()
+        #plt.xlabel(r"$\ln(a)$", fontsize=16)
+        #plt.legend(loc='lower right', fontsize=16)
+        #plt.ylabel(r"$N_N$, $N_{B-L}$, $|\eta_B|$",  fontsize=16)
+        #plt.show()
 
         return self.ys[-1][-1]
