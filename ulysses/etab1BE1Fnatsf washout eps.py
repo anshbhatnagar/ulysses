@@ -83,7 +83,7 @@ def showPlot(lnsf, ys, etab, nN_int, washout, source):
 
 
 #@jit
-def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, epstt, epsmm, epsee, rnuRda_eq, GCF, V):
+def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, eps, rnuRda_eq, GCF, V):
     nN      = y0[0] # RHN number density
     Tsm       = y0[1]  #standard model temperature
     Th = y0[2] #hot sector temperature
@@ -91,8 +91,6 @@ def fast_RHS(y0, lna, M1, gst, gsts, dgstsdTsm, gN, d, invd, w1, epstt, epsmm, e
     Q = y0[4] #total energy transferred between sectors
     
     Mpl = np.sqrt(1/(8 * np.pi * GCF)) #planck mass
-
-    eps = (epstt + epsmm + epsee)
 
     zh=M1/Th
 
@@ -180,7 +178,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.pnames=['m', 'M1', 'M2', 'M3', 'delta', 'a21', 'a31', 'x1', 'x2', 'x3', 'y1', 'y2', 'y3', 't12', 't13', 't23', 'kappa']
+        self.pnames=['m', 'M1', 'M2', 'M3', 'delta', 'a21', 'a31', 'x1', 'x2', 'x3', 'y1', 'y2', 'y3', 't12', 't13', 't23', 'kappa', 'k1', 'eps']
         self.GCF   = 6.71862e-39      # Gravitational constant in GeV^-2
 
         #-------------------------------------#
@@ -214,7 +212,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
 
     def flavourlabels(self): return ["$T$", "$NBL$"]
 
-    def RHS(self, lna, y0, Th, Tsm, epstt, epsmm, epsee, V):
+    def RHS(self, lna, y0, Th, Tsm, eps, V):
         Th = y0[2] #previous Th
         Tsm = y0[1] #previous Tsm
 
@@ -227,7 +225,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         _w1      = _invd * 0.25 * my_kn2(zsm) * zsm**2 #washout rate
         nN_eq     = self.N1Eq(zsm) #equilibrium number density of neutrinos
         
-        return fast_RHS(y0, lna, self.M1, gst, self.ipol_gstarS(Tsm), self.ipol_dgstarSdT(Tsm), self.gN, _d, _invd, _w1,  epstt, epsmm, epsee, nN_eq, self.GCF, V)
+        return fast_RHS(y0, lna, self.M1, gst, self.ipol_gstarS(Tsm), self.ipol_dgstarSdT(Tsm), self.gN, _d, _invd, _w1,  eps, nN_eq, self.GCF, V)
 
     def __call__(self, x):
         r"""
@@ -241,7 +239,36 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         """
         self.setParams(x)
         self.kappa=x['kappa']
+        self.k1param=x['k1']
+        self.eps=10**x['eps']
         return self.EtaB
+
+    @property
+    def ysquare(self):
+        return self.k1*self.mstar*self.M1/(self.v**2)
+
+    @property
+    def meff1(self):
+        """
+        Effective mass 1 used for decay ans washout.
+        """
+        return self.ysquare*(self.v**2)/self.M1
+
+    @property
+    def Gamma1(self):
+        """
+        Decay rate of N1.
+        """
+        M         = self.DM
+
+        return (M[0,0]/(8*np.pi))*self.ysquare
+
+    @property
+    def k1(self):
+        """
+        Decay parameter 1
+        """
+        return self.k1param
 
     @property
     def EtaB(self): #kappa is initial ratio Th/Tsm
@@ -249,6 +276,9 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         epstt = np.real(self.epsilon1ab(2,2))
         epsmm = np.real(self.epsilon1ab(1,1))
         epsee = np.real(self.epsilon1ab(0,0))
+
+        eps = (epstt + epsmm + epsee)
+        eps = self.eps
 
         ggamma      = 2.
 
@@ -269,7 +299,7 @@ class EtaB_1BE1Fsf(ulysses.ULSBase):
         rRadi   = np.pi**2 * self.ipol_gstar(Tsm) / 30. * Tsm**4 # initial radiation domination rho_RAD = pi^2* gstar(T[0])/30*T^4
         y0      = [nN_int,Tsm,Th, 0., 0.] #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * Tsm**3
-        params  = [Th, Tsm, epstt, epsmm, epsee, V]
+        params  = [Th, Tsm, eps, V]
         
         lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
 

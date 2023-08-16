@@ -2,6 +2,9 @@
 import ulysses
 import numpy as np
 from odeintw import odeintw
+from scipy.special import zeta
+
+thermal = False
 
 from ulysses.numba import jit
 @jit
@@ -72,13 +75,32 @@ class EtaB_1DME(ulysses.ULSBase):
         c1m   =                 self.c1a(1)
         c1e   =                 self.c1a(0)
 
+        self.gN = 2
+
+        ggamma = 2.
+
+        self._zmin=0.01
+        self._currz=self._zmin
+        self._zmax=100
+
+        T = self.M1/self.zmin
+
+        V = np.pi**2/(T**3*zeta(3)*ggamma)
+
+        if thermal:
+            N1_int=3./4.*zeta(3)/(np.pi**2)*self.gN*T**3*V #initial RHN number density at temperature Th
+        else:
+            N1_int=0.
+
         k       = np.real(self.k1)
-        y0      = np.array([0+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j], dtype=np.complex128)
+        y0      = np.array([N1_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j], dtype=np.complex128)
 
         params  = np.array([epstt,epsmm,epsee,epstm,epste,epsme,c1t,c1m,c1e,k], dtype=np.complex128)
 
         ys, _      = odeintw(self.RHS, y0, self.zs, args = tuple(params), full_output=True)
 
         self.setEvolData(ys)
+
+        NBL=np.real(ys[:,1]+ys[:,2]+ys[:,3])
 
         return self.ys[-1][-1]
