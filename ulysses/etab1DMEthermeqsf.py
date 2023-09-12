@@ -1,6 +1,5 @@
 from cmath import e
 from locale import MON_1
-from operator import xor
 import ulysses
 import numpy as np
 from scipy import interpolate
@@ -21,11 +20,7 @@ import ast
 
 import progressbar as pb
 
-showLeptoPlot = True
-showTemps = False
-absErr = 5e-3
-relErr  = 5e-4
-cutoff = 100
+showPlotBool=True
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 #             FLRW-Boltzmann Equations            #
@@ -33,17 +28,10 @@ cutoff = 100
 
 def Ip(x):
     integrand = lambda z: z**2/(1+np.exp(np.sqrt(np.abs(z**2+x**2))))
-    return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
-
-def dIpdx(x):
-    integrand = lambda z: -x*z**2*np.exp(np.sqrt(np.abs(z**2+x**2)))/(np.sqrt(np.abs(z**2+x**2))*(1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2)
-    return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
+    return quad(integrand, 0, 50, epsabs=5e-3)[0]
 
 def Ipp(Th,zh):
     return Th**3*Ip(zh)
-
-def dIppdTh(Th,MN):
-    return 3*Th**2*Ip(MN/Th)-MN*Th*dIpdx(MN/Th)
 
 def IppRoot(Th, MN, x):
     return Ipp(Th,MN/Th)-x
@@ -51,50 +39,35 @@ def IppRoot(Th, MN, x):
 def invIpp(x, MN, guess):
     return fsolve(IppRoot,guess,args=(MN,x))[0]
 
-def dinvIppdx(x, MN, guess):
-    return 1/dIppdTh(invIpp(x,MN,guess),MN)
-
 def Jp(x): #J+ function for energy density
     integrand = lambda z: z**2*np.sqrt(np.abs(z**2+x**2))/(1+np.exp(np.sqrt(np.abs(z**2+x**2))))
-    return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
-
-def dJpdx(x): #derivative of the J+ function
-    integrand = lambda z: -x*z**2*(-1+np.exp(np.sqrt(np.abs(z**2+x**2)))*(-1+np.sqrt(np.abs(z**2+x**2))))/((1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2*np.sqrt(np.abs(z**2+x**2)))
-    return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
+    return quad(integrand, 0, 50, epsabs=5e-3)[0]
 
 def Kp(x): #K+ function for pressure
     integrand = lambda z: z**4/(3*np.sqrt(np.abs(z**2+x**2))*(1+np.exp(np.sqrt(np.abs(z**2+x**2)))))
-    return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
-
-def dKpdx(x): #derivative of the K+ function
-    integrand = lambda z:  -x*z**4*(1+np.exp(np.sqrt(np.abs(z**2+x**2)))*(1+np.sqrt(np.abs(z**2+x**2))))/(3*(1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2*np.sqrt(np.abs(z**2+x**2))**3)
-    return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
+    return quad(integrand, 0, 50, epsabs=5e-3)[0]
 
 
 def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source):
-    if showLeptoPlot:
-        plt.plot(lnsf, Th/Tsm, color='r', label=r'$\kappa$')
-        plt.plot(lnsf, np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
-        plt.plot(lnsf, np.abs(etab)*1e10, color='b', label=r'$|\eta_B|\times 10^{10}$')
-        plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
-        plt.ylim(0,2)
-        #plt.plot(lnsf, np.abs(ys[:,9])*1e-8, label=r'$Q$')
+    plt.plot(lnsf, Th/Tsm, color='r', label=r'$\kappa$')
+    plt.plot(lnsf, np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
+    plt.plot(lnsf, np.abs(etab)*1e10, color='b', label=r'$|\eta_B|\times 10^{10}$')
+    plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
     #plt.plot(lnsf, washout/source[0], label=r'$|w/s(a=1)|$')
     #plt.plot(lnsf, source/source[0], label=r'$|s/s(a=1)|$')
     #plt.plot(lnsf, np.abs(ys.y[4]), color='b', label=r'$Q$')
     #plt.scatter(lnsf, np.real(ys[:,0]), color='g', label=r'$N_N/N_N(a=1)$')
-    if showTemps:
-        plt.plot(lnsf, np.log10(Tsm), color='b', label=r'$T_{SM}$')
-        plt.plot(lnsf, np.log10(Th), color='r', label=r'$T_H$')
+    #plt.scatter(lnsf, Tsm*np.exp(lnsf), color='b', label=r'$T_{SM}$')
+    #plt.scatter(lnsf, Th*np.exp(lnsf), color='r', label=r'$T_H$')
     #plt.title("$\kappa(a=1)=1$, $\log_{10}(m_1)=-1$")
     plt.xlabel(r"$\ln(a)$", fontsize=16)
     plt.legend(loc='upper right', fontsize=16)
-    plt.grid()
+    plt.ylim(0,2)
     #plt.ylabel(r"$N_N/N_N(a=1)$, $\kappa$, $|\eta_B|\times 10^{10}$",  fontsize=16)
     plt.show()
 
 #@jit
-def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, N1_eq, nN_int, GCF, gN, gst, V):
+def fast_RHS(y0, lna, rho, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, N1_eq, GCF):
     N1      = y0[0] # RHN number density
     Ntt     = y0[1]
     Nmm     = y0[2]
@@ -102,11 +75,6 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     Ntm     = y0[4]
     Nte     = y0[5]
     Nme     = y0[6]
-    Tsm = np.abs(y0[7])
-    Th = np.abs(y0[8])
-
-    zh=M1/Th
-    zsm=M1/Tsm
 
     c1tc    = c1t.conjugate()
     c1mc    = c1m.conjugate()
@@ -114,61 +82,10 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     
     Mpl = np.sqrt(1/(8 * np.pi * GCF)) #planck mass
 
-    N1_eqH = np.exp(3*lna)*gN*np.real(V)*Ipp(Th,zh)/(2*np.pi**2)
-    f = N1/N1_eqH
-
-    pN1_eqHpTh=np.exp(3*lna)*gN*np.real(V)/(2*np.pi**2)*Th*(3*Th*Ip(zh)-M1*dIpdx(zh))
-    pN1_eqHplna = 3*N1_eqH
-    rhoN = gN/(2*np.pi**2)*Th**4*f*Jp(zh)
-    drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*f*Jp(zh)-M1*f*dJpdx(zh)) #constant f derivative
-
-    pN = gN/(2*np.pi**2)*Th**4*f*Kp(zh)
-    dpNdTh=gN/(2*np.pi**2)*Th**2*(4*Th*f*Kp(zh)-M1*f*dKpdx(zh)) #constant f derivative
-
-    #sets entropy density and derivative for RHN
-    sN = (rhoN+pN)/Th
-    dsNdTh = (drhoNdTh+dpNdTh-sN)/Th #constant f derivative
-
-    #set energy density, pressure, and entropy density for standard model relatiivistic d.o.f.
-    rhoSM = np.pi**2/30.*gst*Tsm**4
-    drhoSMdTsm = 2*np.pi**2/15.*gst*Tsm**3
-
-    pSM = 1/3*rhoSM
-    dpSMdTsm = 1/3*drhoSMdTsm
-
-    sSM=(rhoSM+pSM)/Tsm
-    dsSMdTsm = (drhoSMdTsm+dpSMdTsm-sSM)/Tsm
-
-
-    #set total energy density, pressure and entropy density for SM
-    rho = rhoSM + rhoN
-
-    p = pSM + pN
-
-    s = sSM+sN
-
     H            =      np.sqrt(rho/3.)/Mpl #Hubble parameter
 
-    dN1dlna      =    (-N1*d/H +  (N1_eq)*invd/H) #RHN number density BE
+    dN1dlna      =    -N1*d/H +  (N1_eq)*invd/H #RHN number density BE
 
-    dQdlna = -M1*dN1dlna/V #set energy transfer rate
-
-    pfplna = dN1dlna/N1_eqH-f/N1_eqH*pN1_eqHplna
-    pfpTh = -f/N1_eqH*pN1_eqHpTh
-
-    prhoNpTh = drhoNdTh + rhoN/f*pfpTh
-    ppNpTh = dpNdTh + pN/f*pfpTh
-
-    prhoNplna = rhoN/f*pfplna
-    ppNplna = pN/f*pfplna
-
-    deltaSM = drhoSMdTsm+dpSMdTsm
-
-    denomSM = deltaSM - sSM
-
-    dTsmdlna = (np.exp(-3*lna)*dQdlna-3*sSM*Tsm)/denomSM #SM temperature derivative
-
-    dThdlna = -(drhoSMdTsm*dTsmdlna+3*(rhoSM+rhoN+pSM+pN)+prhoNplna)/prhoNpTh
 
     dNttdlna = -epstt*dN1dlna-0.5*w1/H*(2*c1t*c1tc*Ntt + c1m*c1tc*Ntm + c1e*c1tc*Nte + (c1m*c1tc*Ntm+c1e*c1tc*Nte).conjugate()                  )
     dNmmdlna = -epsmm*dN1dlna-0.5*w1/H*(2*c1m*c1mc*Nmm + c1m*c1tc*Ntm + c1e*c1mc*Nme + (c1m*c1tc*Ntm+c1e*c1mc*Nme).conjugate()                  )
@@ -177,7 +94,7 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     dNtedlna = -epste*dN1dlna-0.5*w1/H*(  c1t*c1ec*Nee + c1e*c1ec*Nte + c1m*c1ec*Ntm + c1t*c1ec*Ntt + c1t*c1mc*Nme + c1t*c1tc*Nte               ) - widtht*Nte
     dNmedlna = -epsme*dN1dlna-0.5*w1/H*(  c1m*c1ec*Nee + c1e*c1ec*Nme + c1m*c1ec*Nmm + c1t*c1ec*(Ntm.conjugate())  + c1m*c1mc*Nme + c1m*c1tc*Nte) - widthm*Nme
 
-    return [dN1dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dThdlna, dQdlna]
+    return [dN1dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna]
 
 class EtaB_1DMEsf(ulysses.ULSBase):
     """
@@ -188,7 +105,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.pnames=['m', 'M1', 'M2', 'M3', 'delta', 'a21', 'a31', 'x1', 'x2', 'x3', 'y1', 'y2', 'y3', 't12', 't13', 't23', 'kappa', 'f']
+        self.pnames=['m', 'M1', 'M2', 'M3', 'delta', 'a21', 'a31', 'x1', 'x2', 'x3', 'y1', 'y2', 'y3', 't12', 't13', 't23', 'kappa']
         self.GCF   = 6.71862e-39      # Gravitational constant in GeV^-2
 
         #-------------------------------------#
@@ -222,10 +139,37 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
     def flavourlabels(self): return ["$T$", "$NBL$"]
 
+    def calculateTemps(self, N1, lna, nN_int, V):
+        gst = self.ipol_gstar(self.inTsm*np.exp(-lna)) #gst estimate
+
+        if self.kappa**3*np.abs(N1)/(nN_int)<10**(-7): #checks if number density is too small to use the inversion
+            #set energy density, pressure and derivatives for RHN assuming the relativistic approximation or using the full expressions
+            rhoN = self.M1*np.real(N1)
+            w = 0
+            rhoSM=np.exp(-4*lna)*(self.rho_in-rhoN*np.exp(lna*3*(1+w)))
+            Tsm = (30/(np.pi**2*gst)*rhoSM)**(1./4.)
+            Th = Tsm #set Th to Tsm as sectors have equilibrated (Th is meaningless at this point anyway and doesn't affect results)
+        else:
+            x=np.exp(-3*lna)*2*np.pi**2*np.abs(N1)/(self.gN*np.real(V)) #parameter for inversion
+            Th = invIpp(x, self.M1, self.inTsm*np.exp(-lna))
+            zh = self.M1/Th
+            Jplus = Jp(zh)
+            rhoN = self.gN/(2*np.pi**2)*Th**4*Jplus
+            if Jplus == 0.:
+                w=0
+            else:
+                w=Kp(zh)/Jplus
+
+            rhoSM=np.exp(-4*lna)*(self.rho_in-rhoN*np.exp(lna*3*(1+w)))
+            Tsm = (30/(np.pi**2*gst)*rhoSM)**(1./4.)
+
+        rho = rhoSM+rhoN
+        
+        return Tsm, Th, rho
+
     def RHS(self, y0, lna, nN_int, epstt, epsmm, epsee,epstm,epste,epsme,c1t,c1m,c1e,k, V):
         N1 = y0[0]
-        Tsm = np.real(y0[7])
-        Th = np.real(y0[8])
+        Tsm, Th, rho = self.calculateTemps(N1, lna, nN_int, V)
 
         zsm = self.M1/Tsm
         zh = self.M1/Th
@@ -239,7 +183,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         widtht = 485e-10*self.MP/self.M1
         widthm = 1.7e-10*self.MP/self.M1
         
-        return fast_RHS(y0, lna, self.M1, _d, _invd, _w1,  epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, nN_eq, nN_int, self.GCF, self.gN, self.ipol_gstar(Tsm), V)
+        return fast_RHS(y0, lna, rho, _d, _invd, _w1,  epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, nN_eq, self.GCF)
 
     def __call__(self, x):
         r"""
@@ -253,7 +197,6 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         """
         self.setParams(x)
         self.kappa=x['kappa']
-        self.f=x['f']
         return self.EtaB
     
 
@@ -276,7 +219,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         ggamma      = 2.
 
-        self.gN=2. #RHN relativistic degrees of freedom
+        self.gN=7/8*2. #RHN relativistic degrees of freedom
         self.inTsm      = 100. * self.M1 # initial temp 100x greater than mass of N1
         self.inTh = self.kappa*self.inTsm
 
@@ -284,21 +227,15 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         #define initial and final ln(a)
         lnain = 0.
-        lnaf = 4*np.log(self.inTsm/self.M1)
+        lnaf = 2*np.log(self.inTsm/self.M1)
         global lnarange
         lnarange=lnaf-lnain
 
-        zeta3= zeta(3)
+        nN_int=3./4.*zeta(3)/(np.pi**2)*self.gN*self.inTh**3*V #initial RHN number density at temperature Th
 
-        besselLimit = 2 # limit of z^2 K_2(z) as z-> 0
+        self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm) *self.inTsm**4+(7./8.)*self.gN*self.inTh**4)
 
-        N1_eqH=1/(2*np.pi**2)*self.gN*self.inTh**3*besselLimit*V #initial RHN number density at temperature Th
-
-        nN_int = self.f*N1_eqH
-
-        self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.f*self.gN*self.inTh**4)
-
-        y0      = np.array([nN_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh, 0], dtype=np.complex128) #initial array
+        y0      = np.array([nN_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j], dtype=np.complex128) #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * self.inTsm**3
         params  = np.array([nN_int, epstt,epsmm,epsee,epstm,epste,epsme,c1t,c1m,c1e,k,V], dtype=np.complex128)
         
@@ -308,8 +245,18 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         ys = odeintw(self.RHS, y0, lnsf, args = tuple(params)) #solves BEs
 
-        T=np.abs(ys[:,7])
-        Th=np.abs(ys[:,8])
+        self.T_arr=[]
+        
+        for i in range(0,100):
+            N1=ys[i][0]
+            lna = lnsf[i]
+            Tsm, Th, rho = self.calculateTemps(N1, lna, nN_int, V)
+            self.T_arr.append([Tsm,Th])
+
+        self.T_arr=np.array(self.T_arr)
+
+        T=self.T_arr[:,0]
+        Th=self.T_arr[:,1]
 
         gstarSrec = self.ipol_gstarS(0.3e-9) # d.o.f. at recombination
         gstarSoff = self.ipol_gstarS(T[-1])  # d.o.f. at the end of leptogenesis
@@ -330,7 +277,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         etab = coeffsph*NBL*nphi/Ngamma
 
-        if showLeptoPlot^showTemps:
+        if showPlotBool:
             zsm=self.M1/T
 
             zh=self.M1/Th

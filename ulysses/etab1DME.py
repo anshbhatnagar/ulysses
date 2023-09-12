@@ -4,7 +4,7 @@ import numpy as np
 from odeintw import odeintw
 from scipy.special import zeta
 
-thermal = False
+thermal = True
 
 from ulysses.numba import jit
 @jit
@@ -87,8 +87,10 @@ class EtaB_1DME(ulysses.ULSBase):
 
         V = np.pi**2/(T**3*zeta(3)*ggamma)
 
+        besselLimit = 2 # limit of z^2 K_2(z) as z-> 0
+
         if thermal:
-            N1_int=3./4.*zeta(3)/(np.pi**2)*self.gN*T**3*V #initial RHN number density at temperature Th
+            N1_int=1/(2*np.pi**2)*self.gN*T**3*besselLimit*V #initial RHN number density at temperature Th
         else:
             N1_int=0.
 

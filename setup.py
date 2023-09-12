@@ -3,7 +3,7 @@ setup(
   name = 'ulysses',
   version = '1.0.2',
   description = 'ULYSSES: Universal LeptogeneSiS Equation Solver',
-  url = 'https://github.com/earlyuniverse/ulysses',
+  url = 'https://github.com/anshbhatnagar/ulysses',
   author = 'Alessandro Granelli, Christopher Leslie, Yuber Perez Gonzalez, Brian Shuve,  Holger Schulz, Jessica Turner, Rosie Walker',
   author_email = 'jessicaturner.5390@gmail.com',
   packages = find_packages(),

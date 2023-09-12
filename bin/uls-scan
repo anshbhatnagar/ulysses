@@ -31,9 +31,9 @@ t23    49.58  # [deg]
 def plotEtaB(data, f_out, pname):
     import pylab
 
-    pylab.plot(data[:,0], 1e10*data[:,1])
+    pylab.plot(data[:,0], np.log10(np.abs(data[:,1])))
     pylab.xlabel(pname)
-    pylab.ylabel("$\eta_B\cdot 10^{10}$")
+    pylab.ylabel("$\eta_B$")
     pylab.tight_layout()
     pylab.savefig(f_out)
 
@@ -91,6 +91,7 @@ if __name__=="__main__":
     if isCasIb:
         if len(FIX) != len(LEPTO.pnames)-1:
             print("Error, the number of fixed parameters needs to be {}, user supplied {}, exiting".format(len(LEPTO.pnames)-1, len(FIX)))
+            print(LEPTO.pnames)
             sys.exit(1)
 
         for p in FIX.keys():
