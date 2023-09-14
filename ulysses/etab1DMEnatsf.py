@@ -17,15 +17,12 @@ import ulysses.numba as nb
 from ulysses.ulsbase import my_kn2, my_kn1
 from odeintw import odeintw
 
-import ast
-
-import progressbar as pb
-
 showLeptoPlot = True
 showTemps = False
-absErr = 5e-3
-relErr  = 5e-4
-cutoff = 100
+
+absErr = 5e-3 #absolute error for Ip, Jp, Kp and derivative integrals
+relErr  = 5e-4 #relative error for Ip, Jp, Kp and derivative integrals
+cutoff = 100 #cutoff at 'infinity' for Ip, Jp, Kp and derivative integrals
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 #             FLRW-Boltzmann Equations            #
@@ -78,11 +75,7 @@ def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source):
         plt.plot(lnsf, np.abs(etab)*1e10, color='b', label=r'$|\eta_B|\times 10^{10}$')
         plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
         plt.ylim(0,2)
-        #plt.plot(lnsf, np.abs(ys[:,9])*1e-8, label=r'$Q$')
-    #plt.plot(lnsf, washout/source[0], label=r'$|w/s(a=1)|$')
-    #plt.plot(lnsf, source/source[0], label=r'$|s/s(a=1)|$')
-    #plt.plot(lnsf, np.abs(ys.y[4]), color='b', label=r'$Q$')
-    #plt.scatter(lnsf, np.real(ys[:,0]), color='g', label=r'$N_N/N_N(a=1)$')
+        
     if showTemps:
         plt.plot(lnsf, np.log10(Tsm), color='b', label=r'$T_{SM}$')
         plt.plot(lnsf, np.log10(Th), color='r', label=r'$T_H$')
@@ -94,7 +87,7 @@ def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source):
     plt.show()
 
 #@jit
-def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, N1_eq, nN_int, GCF, gN, gst, V):
+def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, N1_eq_SM, nN_int, GCF, gN, gst, V):
     N1      = y0[0] # RHN number density
     Ntt     = y0[1]
     Nmm     = y0[2]
@@ -114,11 +107,15 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     
     Mpl = np.sqrt(1/(8 * np.pi * GCF)) #planck mass
 
-    N1_eqH = np.exp(3*lna)*gN*np.real(V)*Ipp(Th,zh)/(2*np.pi**2)
-    f = N1/N1_eqH
+    N1_eq_hot = np.exp(3*lna)*gN*np.real(V)*Ipp(Th,zh)/(2*np.pi**2)
 
-    pN1_eqHpTh=np.exp(3*lna)*gN*np.real(V)/(2*np.pi**2)*Th*(3*Th*Ip(zh)-M1*dIpdx(zh))
-    pN1_eqHplna = 3*N1_eqH
+    f = N1/N1_eq_hot
+
+    #partial derivatives of hot sector equilibrium number density
+    pN1_eq_hotpTh=np.exp(3*lna)*gN*np.real(V)/(2*np.pi**2)*Th*(3*Th*Ip(zh)-M1*dIpdx(zh))
+    pN1_eq_hotplna = 3*N1_eq_hot
+
+    #sets energy density, pressure and derivatives with respect to constant f of hot sector
     rhoN = gN/(2*np.pi**2)*Th**4*f*Jp(zh)
     drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*f*Jp(zh)-M1*f*dJpdx(zh)) #constant f derivative
 
@@ -149,26 +146,26 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     H            =      np.sqrt(rho/3.)/Mpl #Hubble parameter
 
-    dN1dlna      =    (-N1*d/H +  (N1_eq)*invd/H) #RHN number density BE
+    dN1dlna      =    (-N1*d/H +  (N1_eq_SM)*invd/H) #RHN number density BE
 
     dQdlna = -M1*dN1dlna/V #set energy transfer rate
 
-    pfplna = dN1dlna/N1_eqH-f/N1_eqH*pN1_eqHplna
-    pfpTh = -f/N1_eqH*pN1_eqHpTh
+    pfplna = dN1dlna/N1_eq_hot-f/N1_eq_hot*pN1_eq_hotplna #partial derivative of f with respect to ln(a)
+    pfpTh = -f/N1_eq_hot*pN1_eq_hotpTh #partial derivative of f with respect to Th
 
-    prhoNpTh = drhoNdTh + rhoN/f*pfpTh
-    ppNpTh = dpNdTh + pN/f*pfpTh
+    prhoNpTh = drhoNdTh + rhoN/f*pfpTh #partial derivative of neutrino energy density with respect to Th
+    ppNpTh = dpNdTh + pN/f*pfpTh #partial derivative of neutrino pressure with respect to Th
 
-    prhoNplna = rhoN/f*pfplna
-    ppNplna = pN/f*pfplna
+    prhoNplna = rhoN/f*pfplna #partial derivative of neutrino energy density with respect to ln(a)
+    ppNplna = pN/f*pfplna #partial derivative of neutrino pressure with respect to ln(a)
 
     deltaSM = drhoSMdTsm+dpSMdTsm
 
     denomSM = deltaSM - sSM
 
-    dTsmdlna = (np.exp(-3*lna)*dQdlna-3*sSM*Tsm)/denomSM #SM temperature derivative
+    dTsmdlna = (np.exp(-3*lna)*dQdlna-3*sSM*Tsm)/denomSM #SM temperature derivative from second law of thermodynamics
 
-    dThdlna = -(drhoSMdTsm*dTsmdlna+3*(rhoSM+rhoN+pSM+pN)+prhoNplna)/prhoNpTh
+    dThdlna = -(drhoSMdTsm*dTsmdlna+3*(rhoSM+rhoN+pSM+pN)+prhoNplna)/prhoNpTh #Hot sector temperature derivative from comoving energy conservation
 
     dNttdlna = -epstt*dN1dlna-0.5*w1/H*(2*c1t*c1tc*Ntt + c1m*c1tc*Ntm + c1e*c1tc*Nte + (c1m*c1tc*Ntm+c1e*c1tc*Nte).conjugate()                  )
     dNmmdlna = -epsmm*dN1dlna-0.5*w1/H*(2*c1m*c1mc*Nmm + c1m*c1tc*Ntm + c1e*c1mc*Nme + (c1m*c1tc*Ntm+c1e*c1mc*Nme).conjugate()                  )
@@ -292,9 +289,9 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         besselLimit = 2 # limit of z^2 K_2(z) as z-> 0
 
-        N1_eqH=1/(2*np.pi**2)*self.gN*self.inTh**3*besselLimit*V #initial RHN number density at temperature Th
+        N1_eq_hot=1/(2*np.pi**2)*self.gN*self.inTh**3*besselLimit*V #initial RHN number density at temperature Th
 
-        nN_int = self.f*N1_eqH
+        nN_int = self.f*N1_eq_hot
 
         self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.f*self.gN*self.inTh**4)
 
@@ -303,8 +300,6 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         params  = np.array([nN_int, epstt,epsmm,epsee,epstm,epste,epsme,c1t,c1m,c1e,k,V], dtype=np.complex128)
         
         lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
-
-        global pbar
 
         ys = odeintw(self.RHS, y0, lnsf, args = tuple(params)) #solves BEs
 
