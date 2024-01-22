@@ -19,6 +19,7 @@ from odeintw import odeintw
 
 showLeptoPlot = True
 showTemps = False
+includeNormDeriv = True
 
 absErr = 5e-3 #absolute error for Ip, Jp, Kp and derivative integrals
 relErr  = 5e-4 #relative error for Ip, Jp, Kp and derivative integrals
@@ -74,10 +75,12 @@ def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source):
         plt.plot(lnsf, np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
         plt.plot(lnsf, np.abs(etab)*1e10, color='b', label=r'$|\eta_B|\times 10^{10}$')
         plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
+        plt.plot(lnsf, np.abs(ys[:,-1]), label='err')
         plt.ylim(0,2)
         
     if showTemps:
         plt.plot(lnsf, np.log10(Tsm), color='b', label=r'$T_{SM}$')
+        #plt.plot(lnsf, np.log10(np.real(ys[:,0])), color='g', label=r'$N_N$')
         plt.plot(lnsf, np.log10(Th), color='r', label=r'$T_H$')
     #plt.title("$\kappa(a=1)=1$, $\log_{10}(m_1)=-1$")
     plt.xlabel(r"$\ln(a)$", fontsize=16)
@@ -150,8 +153,8 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     dQdlna = -M1*dN1dlna/V #set energy transfer rate
 
-    pfplna = dN1dlna/N1_eq_hot-f/N1_eq_hot*pN1_eq_hotplna #partial derivative of f with respect to ln(a)
-    pfpTh = -f/N1_eq_hot*pN1_eq_hotpTh #partial derivative of f with respect to Th
+    pfplna = includeNormDeriv*(dN1dlna/N1_eq_hot-f/N1_eq_hot*pN1_eq_hotplna) #partial derivative of f with respect to ln(a)
+    pfpTh = includeNormDeriv*(-f/N1_eq_hot*pN1_eq_hotpTh) #partial derivative of f with respect to Th
 
     prhoNpTh = drhoNdTh + rhoN/f*pfpTh #partial derivative of neutrino energy density with respect to Th
     ppNpTh = dpNdTh + pN/f*pfpTh #partial derivative of neutrino pressure with respect to Th
@@ -167,6 +170,14 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     dThdlna = -(drhoSMdTsm*dTsmdlna+3*(rhoSM+rhoN+pSM+pN)+prhoNplna)/prhoNpTh #Hot sector temperature derivative from comoving energy conservation
 
+    deltaH = prhoNpTh + ppNpTh
+
+    betaH = prhoNplna + ppNplna
+
+    denomH = deltaH - sN
+
+    derrdlna = np.abs((dThdlna - (np.exp(-3*lna)*(-dQdlna)-3*sN*Th - betaH)/denomH)/dThdlna)*0 #check with other method
+
     dNttdlna = -epstt*dN1dlna-0.5*w1/H*(2*c1t*c1tc*Ntt + c1m*c1tc*Ntm + c1e*c1tc*Nte + (c1m*c1tc*Ntm+c1e*c1tc*Nte).conjugate()                  )
     dNmmdlna = -epsmm*dN1dlna-0.5*w1/H*(2*c1m*c1mc*Nmm + c1m*c1tc*Ntm + c1e*c1mc*Nme + (c1m*c1tc*Ntm+c1e*c1mc*Nme).conjugate()                  )
     dNeedlna = -epsee*dN1dlna-0.5*w1/H*(2*c1e*c1ec*Nee + c1e*c1mc*Nme + c1e*c1tc*Nte + (c1e*c1mc*Nme+c1e*c1tc*Nte).conjugate()                  )
@@ -174,7 +185,7 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     dNtedlna = -epste*dN1dlna-0.5*w1/H*(  c1t*c1ec*Nee + c1e*c1ec*Nte + c1m*c1ec*Ntm + c1t*c1ec*Ntt + c1t*c1mc*Nme + c1t*c1tc*Nte               ) - widtht*Nte
     dNmedlna = -epsme*dN1dlna-0.5*w1/H*(  c1m*c1ec*Nee + c1e*c1ec*Nme + c1m*c1ec*Nmm + c1t*c1ec*(Ntm.conjugate())  + c1m*c1mc*Nme + c1m*c1tc*Nte) - widthm*Nme
 
-    return [dN1dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dThdlna, dQdlna]
+    return [dN1dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dThdlna, dQdlna, derrdlna]
 
 class EtaB_1DMEsf(ulysses.ULSBase):
     """
@@ -295,7 +306,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.f*self.gN*self.inTh**4)
 
-        y0      = np.array([nN_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh, 0], dtype=np.complex128) #initial array
+        y0      = np.array([nN_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh, 0, 0], dtype=np.complex128) #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * self.inTsm**3
         params  = np.array([nN_int, epstt,epsmm,epsee,epstm,epste,epsme,c1t,c1m,c1e,k,V], dtype=np.complex128)
         
