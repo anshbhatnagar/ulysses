@@ -19,7 +19,7 @@ from odeintw import odeintw
 
 showLeptoPlot = True
 showTemps = False
-includeNormDeriv = True
+includeNormDeriv = False
 
 absErr = 5e-3 #absolute error for Ip, Jp, Kp and derivative integrals
 relErr  = 5e-4 #relative error for Ip, Jp, Kp and derivative integrals

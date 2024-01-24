@@ -17,12 +17,12 @@ import ulysses.numba as nb
 from ulysses.ulsbase import my_kn2, my_kn1
 from odeintw import odeintw
 
-showLeptoPlot = False
-showTemps = True
+showLeptoPlot = True
+showTemps = False
 
-absErr = 5e-6 #absolute error for Ip, Jp, Kp and derivative integrals
-relErr  = 5e-8 #relative error for Ip, Jp, Kp and derivative integrals
-cutoff = 200 #cutoff at 'infinity' for Ip, Jp, Kp and derivative integrals
+absErr = 5e-3 #absolute error for Ip, Jp, Kp and derivative integrals
+relErr  = 5e-4 #relative error for Ip, Jp, Kp and derivative integrals
+cutoff = 100 #cutoff at 'infinity' for Ip, Jp, Kp and derivative integrals
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 #             FLRW-Boltzmann Equations            #
@@ -112,15 +112,27 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     f = N1/N1_eq_hot
 
+    cut = 100
+
     #partial derivatives of hot sector equilibrium number density
-    dN1_eq_hotdTh=gN*np.real(V)/(2*np.pi**2)*Th*(3*Th*Ip(zh)-M1*dIpdx(zh))
+    if zh>cut:
+        dN1_eq_hotdTh=gN*np.real(V)*(M1/(2*np.pi))**(3/2)*np.exp(-zh)*(3/2*np.sqrt(Th)+M1/np.sqrt(Th))
 
-    #sets energy density, pressure and derivatives with respect to constant f of hot sector
-    rhoN = gN/(2*np.pi**2)*Th**4*f*Jp(zh)
-    drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*f*Jp(zh)-M1*f*dJpdx(zh)) #constant f derivative
+        rhoN = M1*N1
+        drhoNdTh = f*M1*dN1_eq_hotdTh
 
-    pN = gN/(2*np.pi**2)*Th**4*f*Kp(zh)
-    dpNdTh=gN/(2*np.pi**2)*Th**2*(4*Th*f*Kp(zh)-M1*f*dKpdx(zh)) #constant f derivative
+        pN = N1*Th
+        dpNdTh=N1
+
+    else:
+        dN1_eq_hotdTh=gN*np.real(V)/(2*np.pi**2)*Th*(3*Th*Ip(zh)-M1*dIpdx(zh))
+
+        #sets energy density, pressure and derivatives with respect to constant f of hot sector
+        rhoN = gN/(2*np.pi**2)*Th**4*f*Jp(zh)
+        drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*f*Jp(zh)-M1*f*dJpdx(zh)) #constant f derivative
+
+        pN = gN/(2*np.pi**2)*Th**4*f*Kp(zh)
+        dpNdTh=gN/(2*np.pi**2)*Th**2*(4*Th*f*Kp(zh)-M1*f*dKpdx(zh)) #constant f derivative
 
     #sets entropy density and derivative for RHN
     sN = (rhoN+pN)/Th
@@ -159,6 +171,9 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     dN1dlna = np.exp(-3*lna)*dN1dlna - 3*N1 #rewriting the derivative in terms of the non-comoving N1
 
+    if zh>cut:
+        dN1dlna = 0
+
     deltaSM = drhoSMdTsm+dpSMdTsm
 
     denomSM = deltaSM - sSM
@@ -166,6 +181,9 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     dTsmdlna = (np.exp(-3*lna)*dQdlna-3*sSM*Tsm)/denomSM #SM temperature derivative from second law of thermodynamics
 
     dThdlna = (np.exp(-3*lna)*dQdlna - 3*(rhoSM+pSM) - drhoSMdTsm*dTsmdlna + dN1dlna*pN/N1)/(pN/N1_eq_hot*dN1_eq_hotdTh+sN-dpNdTh) #hot sector temp derivative via second law + comoving energy conservation
+
+    if zh>cut:
+        dThdlna = -Th
 
     return [dN1dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dThdlna, dQdlna]
 
