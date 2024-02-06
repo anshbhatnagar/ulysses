@@ -45,10 +45,10 @@ def plotEtaB_2D(X, Y, data, f_out, pxname, pyname):
 
     for i in range(len(X)):
         for j in range(len(Y)):
-            Z[j, i] = np.abs(data[i*len(Y) + j, 2])
+            Z[j, i] = np.log10(np.abs(data[i*len(Y) + j, 2]))
 
     fig, ax = plt.subplots()
-    levels=np.linspace(-1.9,1.9,20)
+    levels=np.linspace(-2,2,21)
 
     CS1 = ax.contour(X, Y, Z, cmap='coolwarm', levels=levels)
     CS2 = ax.contourf(X, Y, Z, cmap='coolwarm', levels=levels, alpha=0.5)
