@@ -30,7 +30,6 @@ t23    49.58  # [deg]
 
 def plotEtaB(data, f_out, pname):
     import pylab
-
     pylab.plot(data[:,0], np.log10(np.abs(data[:,1])))
     pylab.xlabel(pname)
     pylab.ylabel("$\eta_B$")

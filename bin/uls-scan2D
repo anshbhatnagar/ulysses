@@ -47,7 +47,7 @@ def plotEtaB_2D(X, Y, data, f_out, pxname, pyname):
             Z[j, i] = np.log10(np.abs(data[i*len(Y) + j, 2]))
 
     fig, ax = plt.subplots()
-    levels=np.linspace(-18.5,-9,20)
+    levels=np.linspace(-12.75,-8,20)
 
     CS1 = ax.contour(X, Y, Z, cmap=cmap1, levels=levels)
     CS2 = ax.contourf(X, Y, Z, cmap=cmap1, levels=levels, alpha=0.5)
