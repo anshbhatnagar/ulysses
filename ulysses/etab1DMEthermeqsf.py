@@ -51,7 +51,7 @@ def Kp(x): #K+ function for pressure
 def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source):
     plt.plot(lnsf, Th/Tsm, color='r', label=r'$\kappa$')
     plt.plot(lnsf, np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
-    plt.plot(lnsf, np.abs(etab)*1e10, color='b', label=r'$|\eta_B|\times 10^{10}$')
+    plt.plot(lnsf, np.abs(etab)*1e9, color='b', label=r'$|\eta_B|\times 10^{9}$')
     plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
     #plt.plot(lnsf, washout/source[0], label=r'$|w/s(a=1)|$')
     #plt.plot(lnsf, source/source[0], label=r'$|s/s(a=1)|$')

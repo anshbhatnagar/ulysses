@@ -21,7 +21,7 @@ import progressbar as pb
 
 relApprox = False
 nonRelApprox = True
-showPlotBool=False
+showPlotBool=True
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++#
 #             FLRW-Boltzmann Equations            #

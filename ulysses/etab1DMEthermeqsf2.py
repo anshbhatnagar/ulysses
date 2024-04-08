@@ -19,7 +19,7 @@ import ulysses.numba as nb
 from ulysses.ulsbase import my_kn2, my_kn1
 from odeintw import odeintw
 
-showLeptoPlot = True
+showLeptoPlot = False
 showTemps = False
 
 absErr = 5e-3 #absolute error for Ip, Jp, Kp and derivative integrals
@@ -72,29 +72,29 @@ def dKpdx(x): #derivative of the K+ function
 
 def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source, Hubble):
     if showLeptoPlot:
-        #plt.plot(lnsf, Th/Tsm, color='r', label=r'$\kappa$')
-        #plt.plot(lnsf, np.exp(3*lnsf)*np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
-        #plt.plot(lnsf, np.abs(etab)*1e9, color='b', label=r'$|\eta_B|\times 10^{9}$')
-        #plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
-        plt.plot(Th, source/washout, label=r'$R_{eq}/R_D$')
+        plt.plot(lnsf, Th/Tsm, color='r', label=r'$\kappa$')
+        plt.plot(lnsf, np.exp(3*lnsf)*np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
+        plt.plot(lnsf, np.abs(etab)*1e8, color='b', label=r'$|\eta_B|\times 10^{8}$')
+        plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
+        #plt.plot(Th, source/washout, label=r'$R_{eq}/R_D$')
         #plt.plot(Th, washout, label=r'$R_D$')
-        plt.plot(Th, Th/Th, label=r'$1$')
-        plt.ylim(0,10)
-        plt.xlim(0,10**8)
+        #plt.plot(Th, Th/Th, label=r'$1$')
+        plt.ylim(0,2)
+        #plt.xlim(0,10**8)
         
     if showTemps:
         plt.plot(lnsf, np.log10(Tsm), color='b', label=r'$T_{SM}$')
         #plt.plot(lnsf, np.log10(np.real(ys[:,0])), color='g', label=r'$N_N$')
         plt.plot(lnsf, np.log10(Th), color='r', label=r'$T_H$')
     #plt.title("$\kappa(a=1)=1$, $\log_{10}(m_1)=-1$")
-    plt.xlabel(r"$T_H$", fontsize=16)
+    plt.xlabel(r"$\ln(a)$", fontsize=16)
     plt.legend(loc='upper right', fontsize=16)
     plt.grid()
     #plt.ylabel(r"$N_N/N_N(a=1)$, $\kappa$, $|\eta_B|\times 10^{10}$",  fontsize=16)
     plt.show()
 
 #@jit
-def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, N1_eq_SM, nN_int, GCF, gN, gst, V):
+def fast_RHS(y0, lna, M1, Th, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, N1_eq_SM, nN_int, GCF, gN, gst, V):
     N1      = y0[0] # RHN number density
     Ntt     = y0[1]
     Nmm     = y0[2]
@@ -103,7 +103,6 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     Nte     = y0[5]
     Nme     = y0[6]
     Tsm = np.abs(y0[7])
-    Th = np.abs(y0[8])
 
     zh=M1/Th
     zsm=M1/Tsm
@@ -116,36 +115,18 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     cut = 20
 
-    if zh > cut:
-        N1_eq_hot = gN*np.real(V)*(M1*Th/(2*np.pi))**(3/2)*np.exp(-zh)
-    else:
-        N1_eq_hot = gN*np.real(V)*Ipp(Th,zh)/(2*np.pi**2)
-
-    f = N1/N1_eq_hot
-
     #partial derivatives of hot sector equilibrium number density
     if zh>cut:
-        dN1_eq_hotdTh=gN*np.real(V)*(M1/(2*np.pi))**(3/2)*np.exp(-zh)*(3/2*np.sqrt(Th)+M1/np.sqrt(Th))
-
         rhoN = M1*N1/V
-        drhoNdTh = f*M1*dN1_eq_hotdTh/V
-
         pN = N1*Th/V
-        dpNdTh=N1/V
-
     else:
-        dN1_eq_hotdTh=gN*np.real(V)/(2*np.pi**2)*Th*(3*Th*Ip(zh)-M1*dIpdx(zh))
-
         #sets energy density, pressure and derivatives with respect to constant f of hot sector
-        rhoN = gN/(2*np.pi**2)*Th**4*f*Jp(zh)
-        drhoNdTh = gN/(2*np.pi**2)*Th**2*(4*Th*f*Jp(zh)-M1*f*dJpdx(zh)) #constant f derivative
+        rhoN = gN/(2*np.pi**2)*Th**4*Jp(zh)
 
-        pN = gN/(2*np.pi**2)*Th**4*f*Kp(zh)
-        dpNdTh=gN/(2*np.pi**2)*Th**2*(4*Th*f*Kp(zh)-M1*f*dKpdx(zh)) #constant f derivative
+        pN = gN/(2*np.pi**2)*Th**4*Kp(zh)
 
     #sets entropy density and derivative for RHN
     sN = (rhoN+pN)/Th
-    dsNdTh = (drhoNdTh+dpNdTh-sN)/Th #constant f derivative
 
     #set energy density, pressure, and entropy density for standard model relatiivistic d.o.f.
     rhoSM = np.pi**2/30.*gst*Tsm**4
@@ -186,9 +167,7 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     dTsmdlna = (np.exp(-3*lna)*dQdlna-3*sSM*Tsm)/denomSM #SM temperature derivative from second law of thermodynamics
 
-    dThdlna = (np.exp(-3*lna)*dQdlna - 3*(rhoSM+pSM) - drhoSMdTsm*dTsmdlna + dN1dlna*pN/N1)/(pN/N1_eq_hot*dN1_eq_hotdTh+sN-dpNdTh) #hot sector temp derivative via second law + comoving energy conservation
-
-    return [dN1dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dThdlna, dQdlna]
+    return [dN1dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dQdlna]
 
 class EtaB_1DMEsf(ulysses.ULSBase):
     """
@@ -234,6 +213,16 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
     def flavourlabels(self): return ["$T$", "$NBL$"]
 
+    def calculateTemp(self, N1, lna, Tsm, nN_int, V):
+
+        if self.kappa**3*np.abs(N1)/(nN_int)<10**(-7): #checks if number density is too small to use the inversion
+            Th = Tsm #set Th to Tsm as sectors have equilibrated (Th is meaningless at this point anyway and doesn't affect results)
+        else:
+            x=2*np.pi**2*np.abs(N1)/(self.gN*np.real(V)) #parameter for inversion
+            Th = invIpp(x, self.M1, self.inTsm*np.exp(-lna))
+        
+        return Th
+
     def sigma(self, s,mH,mN,yH):
         hDiff = mH**2-s
         hSum = mH**2+s
@@ -250,7 +239,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
     def RHS(self, y0, lna, nN_int, epstt, epsmm, epsee,epstm,epste,epsme,c1t,c1m,c1e,k, V):
         N1 = y0[0]
         Tsm = np.real(y0[7])
-        Th = np.real(y0[8])
+        Th = self.calculateTemp(N1, lna, Tsm, nN_int, V)
 
         zsm = self.M1/Tsm
         zh = self.M1/Th
@@ -260,7 +249,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         _w1      = _invd * 0.25 * my_kn2(zsm) * zsm**2 #washout rate
         nN_eq     = self.N1Eq(zsm) #equilibrium number density of neutrinos
 
-        if(np.log10(np.exp(3*lna)*np.real(N1)/nN_int) < -6):
+        if(np.log10(np.exp(3*lna)*np.real(N1)/nN_int) < -7):
             self.evolEnd = True
 
         # thermal widths are set to zero such that we are in the "one-flavoured regime"
@@ -268,9 +257,9 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         widthm = 1.7e-10*self.MP/self.M1
 
         if self.evolEnd:
-            return [-3*N1, 0, 0, 0, 0, 0, 0, -Tsm, -Th, 0]
+            return [0, 0, 0, 0, 0, 0, 0, -Tsm, 0]
         else:
-            return fast_RHS(y0, lna, self.M1, _d, _invd, _w1,  epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, nN_eq, nN_int, self.GCF, self.gN, self.ipol_gstar(Tsm), V)
+            return fast_RHS(y0, lna, self.M1, Th, _d, _invd, _w1,  epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, nN_eq, nN_int, self.GCF, self.gN, self.ipol_gstar(Tsm), V)
 
     def __call__(self, x):
         r"""
@@ -306,8 +295,6 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         self.evolEnd = False
 
-        self.f=1
-
         ggamma      = 2.
 
         self.gN=2. #RHN relativistic degrees of freedom
@@ -328,11 +315,11 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         N1_eq_hot=1/(2*np.pi**2)*self.gN*self.inTh**3*besselLimit*V #initial RHN number density at temperature Th
 
-        nN_int = self.f*N1_eq_hot
+        nN_int = N1_eq_hot
 
-        self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.f*self.gN*self.inTh**4)
+        self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.gN*self.inTh**4)
 
-        y0      = np.array([nN_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh, 0], dtype=np.complex128) #initial array
+        y0      = np.array([nN_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, 0], dtype=np.complex128) #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * self.inTsm**3
         params  = np.array([nN_int, epstt,epsmm,epsee,epstm,epste,epsme,c1t,c1m,c1e,k,V], dtype=np.complex128)
         
@@ -340,7 +327,17 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         ys = odeintw(self.RHS, y0, lnsf, args = tuple(params)) #solves BEs
 
         T=np.abs(ys[:,7])
-        Th=np.abs(ys[:,8])
+
+        Th=[]
+        
+        for i in range(0,100):
+            N1=ys[i][0]
+            lna = lnsf[i]
+            Tsm = T[i]
+            hotTemp = self.calculateTemp(N1, lna, Tsm, nN_int, V)
+            Th.append(hotTemp)
+
+        Th = np.array(Th)
 
         gstarSrec = self.ipol_gstarS(0.3e-9) # d.o.f. at recombination
         gstarSoff = self.ipol_gstarS(T[-1])  # d.o.f. at the end of leptogenesis
