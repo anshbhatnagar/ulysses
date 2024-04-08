@@ -1,5 +1,4 @@
 from cmath import e
-from difflib import HtmlDiff
 from locale import MON_1
 from operator import xor
 from xmlrpc.client import FastMarshaller
@@ -19,7 +18,7 @@ import ulysses.numba as nb
 from ulysses.ulsbase import my_kn2, my_kn1
 from odeintw import odeintw
 
-showLeptoPlot = True
+showLeptoPlot = False
 showTemps = False
 
 absErr = 5e-3 #absolute error for Ip, Jp, Kp and derivative integrals
@@ -70,24 +69,20 @@ def dKpdx(x): #derivative of the K+ function
     return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
 
 
-def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source, Hubble):
+def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source):
     if showLeptoPlot:
-        #plt.plot(lnsf, Th/Tsm, color='r', label=r'$\kappa$')
-        #plt.plot(lnsf, np.exp(3*lnsf)*np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
-        #plt.plot(lnsf, np.abs(etab)*1e9, color='b', label=r'$|\eta_B|\times 10^{9}$')
-        #plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
-        plt.plot(Th, source/washout, label=r'$R_{eq}/R_D$')
-        #plt.plot(Th, washout, label=r'$R_D$')
-        plt.plot(Th, Th/Th, label=r'$1$')
-        plt.ylim(0,10)
-        plt.xlim(0,10**8)
+        plt.plot(lnsf, Th/Tsm, color='r', label=r'$\kappa$')
+        plt.plot(lnsf, np.exp(3*lnsf)*np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
+        plt.plot(lnsf, np.abs(etab)*1e9, color='b', label=r'$|\eta_B|\times 10^{9}$')
+        plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
+        plt.ylim(0,2)
         
     if showTemps:
         plt.plot(lnsf, np.log10(Tsm), color='b', label=r'$T_{SM}$')
         #plt.plot(lnsf, np.log10(np.real(ys[:,0])), color='g', label=r'$N_N$')
         plt.plot(lnsf, np.log10(Th), color='r', label=r'$T_H$')
     #plt.title("$\kappa(a=1)=1$, $\log_{10}(m_1)=-1$")
-    plt.xlabel(r"$T_H$", fontsize=16)
+    plt.xlabel(r"$\ln(a)$", fontsize=16)
     plt.legend(loc='upper right', fontsize=16)
     plt.grid()
     #plt.ylabel(r"$N_N/N_N(a=1)$, $\kappa$, $|\eta_B|\times 10^{10}$",  fontsize=16)
@@ -127,11 +122,11 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     if zh>cut:
         dN1_eq_hotdTh=gN*np.real(V)*(M1/(2*np.pi))**(3/2)*np.exp(-zh)*(3/2*np.sqrt(Th)+M1/np.sqrt(Th))
 
-        rhoN = M1*N1/V
-        drhoNdTh = f*M1*dN1_eq_hotdTh/V
+        rhoN = M1*N1
+        drhoNdTh = f*M1*dN1_eq_hotdTh
 
-        pN = N1*Th/V
-        dpNdTh=N1/V
+        pN = N1*Th
+        dpNdTh=N1
 
     else:
         dN1_eq_hotdTh=gN*np.real(V)/(2*np.pi**2)*Th*(3*Th*Ip(zh)-M1*dIpdx(zh))
@@ -337,6 +332,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         params  = np.array([nN_int, epstt,epsmm,epsee,epstm,epste,epsme,c1t,c1m,c1e,k,V], dtype=np.complex128)
         
         lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
+
         ys = odeintw(self.RHS, y0, lnsf, args = tuple(params)) #solves BEs
 
         T=np.abs(ys[:,7])
@@ -361,54 +357,13 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         etab = coeffsph*NBL*nphi/Ngamma
 
+        zsm=self.M1/T
+
+        zh=self.M1/Th
+
+        d       = np.real(self.Gamma1* kn(1,zh) / kn(2,zh)) #decay rate thermal averaged with hot sector
+
         if showLeptoPlot^showTemps:
-            zsm=self.M1/T
-
-            zh=self.M1/Th
-
-            d       = np.real(self.Gamma1* kn(1,zh) / kn(2,zh)) #decay rate thermal averaged with hot sector
-
-            nH = ys[:,0]
-
-            GammaTherm = []
-
-            yH = np.amax(np.abs(np.transpose(self.h)[0]))
-
-            Hubble = []
-
-            for i in range(0,100):
-                Mpl = np.sqrt(1/(8 * np.pi * self.GCF)) #planck mass
-
-                cut = 20
-
-                if zh[i] > cut:
-                    N1_eq_hot = self.gN*np.real(V)*(self.M1*Th[i]/(2*np.pi))**(3/2)*np.exp(-zh[i])
-                else:
-                    N1_eq_hot = self.gN*np.real(V)*Ipp(Th[i],zh[i])/(2*np.pi**2)
-
-                f = nH[i]/N1_eq_hot
-
-                rhoN = self.gN/(2*np.pi**2)*Th[i]**4*f*Jp(zh[i])
-                rhoSM = np.pi**2/30.*self.ipol_gstar(T[i])*T[i]**4
-                rho = rhoSM + rhoN
-
-                Hub=np.sqrt(rho/3.)/Mpl
-
-                Hubble.append(Hub) #Hubble parameter
-
-                gLeptst = 3/4*2*6
-
-                nSM = zeta3/(np.pi**2)*gLeptst*T[i]**3
-
-                d[i] = d[i]*np.real(nH[i]/V)
-
-                GammaTherm.append(self.sv(Th[i],125,self.M1,yH)*nSM*nH[i]/np.real(V))
-            
-            GammaTherm = np.array(GammaTherm)
-            Hubble = np.array(Hubble)
-            GammaTherm = GammaTherm/(Hubble**3)
-            d = d/(Hubble**3)
-
             invd = np.real(self.Gamma1* kn(1,zsm) / kn(2,zsm)) #decay rate thermal averaged with SM
             invd[np.isnan(invd)] = 0
             w=invd * 0.25 * kn(2,zsm) * zsm**2
@@ -421,6 +376,44 @@ class EtaB_1DMEsf(ulysses.ULSBase):
             
             source=np.abs(eps *(-ys[:,0]*d +  neq*invd))
 
-            showPlot(lnsf, ys, etab, T, Th, nN_int, NBL, d, GammaTherm, Hubble)
+            showPlot(lnsf, ys, etab, T, Th, nN_int, NBL, washout, source)
 
-        return np.abs(etab[-1])
+        nH = ys[:,0]
+
+        yH = np.amax(np.abs(np.transpose(self.h)[0]))
+
+        eqBool = False
+
+        for i in range(0,100):
+            Mpl = np.sqrt(1/(8 * np.pi * self.GCF)) #planck mass
+
+            cut = 20
+
+            if zh[i] > cut:
+                N1_eq_hot = self.gN*np.real(V)*(self.M1*Th[i]/(2*np.pi))**(3/2)*np.exp(-zh[i])
+            else:
+                N1_eq_hot = self.gN*np.real(V)*Ipp(Th[i],zh[i])/(2*np.pi**2)
+
+            f = nH[i]/N1_eq_hot
+
+            rhoN = self.gN/(2*np.pi**2)*Th[i]**4*f*Jp(zh[i])
+            rhoSM = np.pi**2/30.*self.ipol_gstar(T[i])*T[i]**4
+            rho = rhoSM + rhoN
+
+            Hubble = np.real(np.sqrt(rho/3.)/Mpl) #Hubble parameter
+
+            leptogst = 3/4*2*6
+
+            nSM = np.real(zeta3/(np.pi**2)*leptogst*T[i]**3)
+
+            n = nH[i]
+
+            GammaTherm = np.real(self.sv(np.real(Th[i]),125,self.M1,yH)*nSM)
+
+            if ((GammaTherm > d[i]) and (GammaTherm > Hubble) and (np.real(Th[i]/self.M1) > 0.1)):
+                eqBool = True
+        
+        if(eqBool):
+            return 0
+        else:
+            return np.abs(etab[-1])
