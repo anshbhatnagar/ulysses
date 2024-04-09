@@ -414,6 +414,6 @@ class EtaB_1DMEsf(ulysses.ULSBase):
                 eqBool = True
         
         if(eqBool):
-            return 0
+            return -np.abs(etab[-1])
         else:
             return np.abs(etab[-1])
