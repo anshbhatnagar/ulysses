@@ -1,22 +1,16 @@
-from cmath import e
-from locale import MON_1
-from operator import xor
-from xmlrpc.client import FastMarshaller
+# non-resonant leptogenesis with three decaying sterile neutrino using the density matrix equations. Equations from 1112.4528
 import ulysses
 import numpy as np
 from scipy import interpolate
-from scipy.integrate import odeint
-from scipy.integrate import solve_ivp
 from scipy.special import zeta
-from scipy.special import k1
 from scipy.special import kn
 from scipy.optimize import fsolve
 from scipy.integrate import quad
-from ulysses.numba import jit
-import matplotlib.pyplot as plt
-import ulysses.numba as nb
 from ulysses.ulsbase import my_kn2, my_kn1
+import matplotlib.pyplot as plt
 from odeintw import odeintw
+
+from ulysses.numba import jit
 
 absErr = 5e-3 #absolute error for Ip, Jp, Kp and derivative integrals
 relErr  = 5e-4 #relative error for Ip, Jp, Kp and derivative integrals
@@ -66,24 +60,31 @@ def dKpdx(x): #derivative of the K+ function
     return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
 
 #@jit
-def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, N1_eq_SM, nN_int, GCF, gN, gst, V):
-    N1      = y0[0] # RHN number density
-    Ntt     = y0[1]
-    Nmm     = y0[2]
-    Nee     = y0[3]
-    Ntm     = y0[4]
-    Nte     = y0[5]
-    Nme     = y0[6]
-    Tsm = np.abs(y0[7])
-    Th = np.abs(y0[8])
+def fast_RHS(y0,lna,M1,M2,M3,gst,gN,GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W, d1,invd1,d2,d3,w1,w2,w3,n1eq,n2eq,n3eq):
+    N1, N2, N3, Ntt, Nmm, Nee, Ntm, Nte, Nme, Tsm, Th = y0
+
+    Tsm = np.abs(Tsm)
+    Th = np.abs(Th)
 
     zh=M1/Th
     zsm=M1/Tsm
 
-    c1tc    = c1t.conjugate()
-    c1mc    = c1m.conjugate()
-    c1ec    = c1e.conjugate()
-    
+    N1_eq_SM = n1eq
+
+    c1t,c1m,c1e,c2t,c2m,c2e,c3t,c3m,c3e = C
+    widtht,widthm = W
+    c1tc    = np.conjugate(c1t)
+    c1mc    = np.conjugate(c1m)
+    c1ec    = np.conjugate(c1e)
+
+    c2tc    = np.conjugate(c2t)
+    c2mc    = np.conjugate(c2m)
+    c2ec    = np.conjugate(c2e)
+
+    c3tc    = np.conjugate(c3t)
+    c3mc    = np.conjugate(c3m)
+    c3ec    = np.conjugate(c3e)
+
     Mpl = np.sqrt(1/(8 * np.pi * GCF)) #planck mass
 
     cut = 20
@@ -119,6 +120,12 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     sN = (rhoN+pN)/Th
     dsNdTh = (drhoNdTh+dpNdTh-sN)/Th #constant f derivative
 
+    if Tsm > M2:
+        gst += 7./8.*gN
+
+    if Tsm > M3:
+        gst += 7./8.*gN
+
     #set energy density, pressure, and entropy density for standard model relatiivistic d.o.f.
     rhoSM = np.pi**2/30.*gst*Tsm**4
     drhoSMdTsm = 2*np.pi**2/15.*gst*Tsm**3
@@ -129,7 +136,6 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
     sSM=(rhoSM+pSM)/Tsm
     dsSMdTsm = (drhoSMdTsm+dpSMdTsm-sSM)/Tsm
 
-
     #set total energy density, pressure and entropy density for SM
     rho = rhoSM + rhoN
 
@@ -139,16 +145,51 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     H            =      np.sqrt(rho/3.)/Mpl #Hubble parameter
 
-    dN1dlna      =    (-np.exp(3*lna)*N1*d/H +  (N1_eq_SM)*invd/H) #RHN number density BE - for comoving N1
+    #define the different RHSs for each equation
+    dN1dlna      =    (-np.exp(3*lna)*N1*d1/H +  (N1_eq_SM)*invd1/H) #RHN number density BE - for comoving N1
+    dN2dlna    =      - d2/H * (N2-n2eq)
+    dN3dlna    =      - d3/H * (N3-n3eq)
 
     dQdlna = -M1*dN1dlna/V #set energy transfer rate
 
-    dNttdlna = -epstt*dN1dlna-0.5*w1/H*(2*c1t*c1tc*Ntt + c1m*c1tc*Ntm + c1e*c1tc*Nte + (c1m*c1tc*Ntm+c1e*c1tc*Nte).conjugate()                  )
-    dNmmdlna = -epsmm*dN1dlna-0.5*w1/H*(2*c1m*c1mc*Nmm + c1m*c1tc*Ntm + c1e*c1mc*Nme + (c1m*c1tc*Ntm+c1e*c1mc*Nme).conjugate()                  )
-    dNeedlna = -epsee*dN1dlna-0.5*w1/H*(2*c1e*c1ec*Nee + c1e*c1mc*Nme + c1e*c1tc*Nte + (c1e*c1mc*Nme+c1e*c1tc*Nte).conjugate()                  )
-    dNtmdlna = -epstm*dN1dlna-0.5*w1/H*(  c1t*c1mc*Nmm + c1e*c1mc*Nte + c1m*c1mc*Ntm + c1mc*c1t*Ntt + c1t*c1tc*Ntm + c1t*c1ec*(Nme.conjugate()) ) - widtht/H*Ntm - widthm/H*Ntm
-    dNtedlna = -epste*dN1dlna-0.5*w1/H*(  c1t*c1ec*Nee + c1e*c1ec*Nte + c1m*c1ec*Ntm + c1t*c1ec*Ntt + c1t*c1mc*Nme + c1t*c1tc*Nte               ) - widtht/H*Nte
-    dNmedlna = -epsme*dN1dlna-0.5*w1/H*(  c1m*c1ec*Nee + c1e*c1ec*Nme + c1m*c1ec*Nmm + c1t*c1ec*(Ntm.conjugate())  + c1m*c1mc*Nme + c1m*c1tc*Nte) - widthm/H*Nme
+    dNttdlna    = (eps1tt * (-dN1dlna) + eps2tt * (-dN2dlna) + eps3tt * (-dN3dlna)
+            - 0.5 * w1/H * (2 * c1t * c1tc * Ntt + c1m * c1tc * Ntm + c1e * c1tc * Nte + np.conjugate(c1m * c1tc * Ntm + c1e * c1tc * Nte))
+            - 0.5 * w2/H * (2 * c2t * c2tc * Ntt + c2m * c2tc * Ntm + c2e * c2tc * Nte + np.conjugate(c2m * c2tc * Ntm + c2e * c2tc * Nte))
+            - 0.5 * w3/H * (2 * c3t * c3tc * Ntt + c3m * c3tc * Ntm + c3e * c3tc * Nte + np.conjugate(c3m * c3tc * Ntm + c3e * c3tc * Nte)))
+
+    dNmmdlna    = (eps1mm * (-dN1dlna) + eps2mm * (-dN2dlna) + eps3mm * (-dN3dlna)
+            - 0.5 * w1/H * (2 * c1m * c1mc * Nmm + c1m * c1tc * Ntm + c1e * c1mc * Nme + np.conjugate(c1m * c1tc * Ntm + c1e * c1mc * Nme))
+            - 0.5 * w2/H * (2 * c2m * c2mc * Nmm + c2m * c2tc * Ntm + c2e * c2mc * Nme + np.conjugate(c2m * c2tc * Ntm + c2e * c2mc * Nme))
+            - 0.5 * w3/H * (2 * c3m * c3mc * Nmm + c3m * c3tc * Ntm + c3e * c3mc * Nme + np.conjugate(c3m * c3tc * Ntm + c3e * c3mc * Nme)))
+
+    dNeedlna    = (eps1ee * (-dN1dlna) + eps2ee * (-dN2dlna) + eps3ee * (-dN3dlna)
+            - 0.5 * w1/H * (2 * c1e * c1ec * Nee + c1e * c1mc * Nme + c1e * c1tc * Nte + np.conjugate(c1e * c1mc * Nme + c1e * c1tc * Nte))
+            - 0.5 * w2/H * (2 * c2e * c2ec * Nee + c2e * c2mc * Nme + c2e * c2tc * Nte + np.conjugate(c2e * c2mc * Nme + c2e * c2tc * Nte))
+            - 0.5 * w3/H * (2 * c3e * c3ec * Nee + c3e * c3mc * Nme + c3e * c3tc * Nte + np.conjugate(c3e * c3mc * Nme + c3e * c3tc * Nte)))
+
+    dNtmdlna    = (eps1tm * (-dN1dlna) + eps2tm * (-dN2dlna) + eps3tm * (-dN3dlna)
+            - 0.5/H*((w1 * c1t * c1mc + w2 * c2t * c2mc + w3 * c3t * c3mc) * Nmm
+            +        (w1 * c1e * c1mc + w2 * c2e * c2mc + w3 * c3e * c3mc) * Nte
+            +        (w1 * c1m * c1mc + w2 * c2m * c2mc + w3 * c3m * c3mc) * Ntm
+            +        (w1 * c1mc * c1t + w2 * c2mc * c2t + w3 * c3mc * c3t) * Ntt
+            +        (w1 * c1t * c1tc + w2 * c2t * c2tc + w3 * c3t * c3tc + 2 * widtht + 2 * widthm) * Ntm
+            +        (w1 * c1t * c1ec + w2 * c2t * c2ec + w3 * c3t * c3ec) * np.conjugate(Nme)))
+
+    dNtedlna    = (eps1te * (-dN1dlna) + eps2te * (-dN2dlna) + eps3te * (-dN3dlna)
+            - 0.5/H*((w1 * c1t * c1ec + w2 * c2t * c2ec + w3 * c3t * c3ec) * Nee
+            +        (w1 * c1e * c1ec + w2 * c2e * c2ec + w3 * c3e * c3ec) * Nte
+            +        (w1 * c1m * c1ec + w2 * c2m * c2ec + w3 * c3m * c3ec) * Ntm
+            +        (w1 * c1t * c1ec + w2 * c2t * c2ec + w3 * c3t * c3ec) * Ntt
+            +        (w1 * c1t * c1mc + w2 * c2t * c2mc + w3 * c3t * c3mc) * Nme
+            +        (w1 * c1t * c1tc + w2 * c2t * c2tc + w3 * c3t * c3tc + 2 * widtht) * Nte))
+
+    dNmedlna    = (eps1me * (-dN1dlna) + eps2me * (-dN2dlna) + eps3me * (-dN3dlna)
+            - 0.5/H * ((w1 * c1m * c1ec + w2 * c2m * c2ec + w3 * c3m * c3ec) * Nee
+            +        (w1 * c1e * c1ec + w2 * c2e * c2ec + w3 * c3e * c3ec + 2 * widthm) * Nme
+            +        (w1 * c1m * c1ec + w2 * c2m * c2ec + w3 * c3m * c3ec) * Nmm
+            +        (w1 * c1t * c1ec + w2 * c2t * c2ec + w3 * c3t * c3ec) * np.conjugate(Ntm)
+            +        (w1 * c1m * c1mc + w2 * c2m * c2mc + w3 * c3m * c3mc) * Nme
+            +        (w1 * c1m * c1tc + w2 * c2m * c2tc + w3 * c3m * c3tc) * Nte))
 
     dN1dlna = np.exp(-3*lna)*dN1dlna - 3*N1 #rewriting the derivative in terms of the non-comoving N1
 
@@ -160,13 +201,12 @@ def fast_RHS(y0, lna, M1, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1
 
     dThdlna = (np.exp(-3*lna)*dQdlna - 3*(rhoSM+pSM) - drhoSMdTsm*dTsmdlna + dN1dlna*pN/N1)/(pN/N1_eq_hot*dN1_eq_hotdTh+sN-dpNdTh) #hot sector temp derivative via second law + comoving energy conservation
 
-    return [dN1dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dThdlna, dQdlna]
+    return [dN1dlna, dN2dlna, dN3dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dThdlna]
 
-class EtaB_1DMEsf(ulysses.ULSBase):
+
+class EtaB_3DMEsf(ulysses.ULSBase):
     """
-    Boltzmann equations with one decaying sterile. For detailed discussions of
-    equation derivation see arxiv:1104.2750.  Note these kinetic equations do
-    not include off diagonal flavour oscillations.
+    Density matrix equation (DME) with three decaying steriles. See arxiv:1112.4528.
     """
 
     def __init__(self, *args, **kwargs):
@@ -200,11 +240,9 @@ class EtaB_1DMEsf(ulysses.ULSBase):
     def ipol_dgstarSdT(self,T):
         return interpolate.splev(T, self.tckS_, der = 1)
 
-    def shortname(self): return "1BE1Fsf"
-
-    def flavourindices(self): return [1, 2]
-
-    def flavourlabels(self): return ["$T$", "$NBL$"]
+    def shortname(self): return "3DME"
+    def flavourindices(self): return [3, 4, 5]
+    def flavourlabels(self): return ["$N_{\\tau\\tau}$", "$N_{\mu\mu}$", "$N_{ee}$"]
 
     def sigma(self, s,mH,mN,yH):
         hDiff = mH**2-s
@@ -223,30 +261,46 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         integrand = lambda s: 1./(16*Tsm**2*mN**2*my_kn2(mN/Th))*self.sigma(s,mH,mN,yH)*C(s)/B(s)*(A*(1+z(s))*np.exp(-z(s))+C(s)*np.sqrt(B(s))*my_kn1(z(s)))
         return quad(integrand, mN**2, cutoff*mN**2,epsabs=absErr, epsrel = relErr)[0]
 
-    def RHS(self, y0, lna, nN_int, epstt, epsmm, epsee,epstm,epste,epsme,c1t,c1m,c1e,k, V):
-        N1 = y0[0]
-        Tsm = np.real(y0[7])
-        Th = np.real(y0[8])
+    def RHS(self, y0, lna, nN_int, V, ETA, _C, K, _W):
+        N1, N2, N3, Ntt, Nmm, Nee, Ntm, Nte, Nme, Tsm, Th = y0
 
-        zsm = self.M1/Tsm
-        zh = self.M1/Th
+        Tsm = np.abs(Tsm)
+        Th = np.abs(Th)
 
-        _d       = np.real(self.Gamma1* my_kn1(zh) / my_kn2(zh)) #decay rate thermal averaged with hot sector
-        _invd = np.real(self.Gamma1* my_kn1(zsm) / my_kn2(zsm)) #decay rate thermal averaged with SM
-        _w1      = _invd * 0.25 * my_kn2(zsm) * zsm**2 #washout rate
-        nN_eq     = self.N1Eq(zsm) #equilibrium number density of neutrinos
+        zh=self.M1/Th
+        zsm=self.M1/Tsm
+
+        (eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me) = ETA
+        c1t,c1m,c1e,c2t,c2m,c2e,c3t,c3m,c3e = _C
+        from ulysses.numba import List
+        C=List()
+        [C.append(c) for c in _C]
+
+        k1term,k2term,k3term = K
+        widtht,widthm = _W
+        W=List()
+        [W.append(w) for w in _W]
+
+        self._d1       = np.real(self.Gamma1* my_kn1(zh) / my_kn2(zh)) #decay rate thermal averaged with hot sector
+        self._invd1 = np.real(self.Gamma1* my_kn1(zsm) / my_kn2(zsm)) #decay rate thermal averaged with SM
+        self._w1      = self._invd1 * 0.25 * my_kn2(zsm) * zsm**2 #washout rate
+        self._d2      = np.real(self.D2(k2term, zsm))
+        self._w2      = np.real(self.W2(k2term, zsm))
+        self._d3      = np.real(self.D3(k3term, zsm))
+        self._w3      = np.real(self.W3(k3term, zsm))
+        self._n1eq    = self.N1Eq(zsm)
+        self._n2eq    = self.N2Eq(zsm)
+        self._n3eq    = self.N3Eq(zsm)
+
 
         if(np.log10(np.exp(3*lna)*np.real(N1)/nN_int) < -6):
             self.evolEnd = True
 
-        # thermal widths are set to zero such that we are in the "one-flavoured regime"
-        widtht = 485e-10*self.MP/self.M1
-        widthm = 1.7e-10*self.MP/self.M1
-
         if self.evolEnd:
-            return [-3*N1, 0, 0, 0, 0, 0, 0, -Tsm, -Th, 0]
+            return [-3*np.abs(N1), 0, 0, 0, 0, 0, 0, 0, 0, -Tsm, -Th]
         else:
-            return fast_RHS(y0, lna, self.M1, _d, _invd, _w1,  epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, nN_eq, nN_int, self.GCF, self.gN, self.ipol_gstar(Tsm), V)
+            return fast_RHS(y0,lna,self.M1,self.M2,self.M3,self.ipol_gstar(Tsm),self.gN,self.GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W,
+                self._d1,self._invd1,self._d2,self._d3,self._w1,self._w2,self._w3,self._n1eq,self._n2eq,self._n3eq)
 
     def __call__(self, x):
         r"""
@@ -265,20 +319,35 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
 
     @property
-    def EtaB(self): #kappa is initial ratio Th/Tsm
+    def EtaB(self):
+
         #Define fixed quantities for BEs
-        epstt = np.real(self.epsilon1ab(2,2))
-        epsmm = np.real(self.epsilon1ab(1,1))
-        epsee = np.real(self.epsilon1ab(0,0))
-        epstm =         self.epsilon1ab(2,1)
-        epste =         self.epsilon1ab(2,0)
-        epsme =         self.epsilon1ab(1,0)
+        _ETA = [
+            np.real(self.epsilon1ab(2,2)),
+            np.real(self.epsilon1ab(1,1)),
+            np.real(self.epsilon1ab(0,0)),
+                    self.epsilon1ab(2,1) ,
+                    self.epsilon1ab(2,0) ,
+                    self.epsilon1ab(1,0) ,
+            np.real(self.epsilon2ab(2,2)),
+            np.real(self.epsilon2ab(1,1)),
+            np.real(self.epsilon2ab(0,0)),
+                    self.epsilon2ab(2,1) ,
+                    self.epsilon2ab(2,0) ,
+                    self.epsilon2ab(1,0) ,
+            np.real(self.epsilon3ab(2,2)),
+            np.real(self.epsilon3ab(1,1)),
+            np.real(self.epsilon3ab(0,0)),
+                    self.epsilon3ab(2,1) ,
+                    self.epsilon3ab(2,0) ,
+                    self.epsilon3ab(1,0)]
 
-        c1t   =                 self.c1a(2)
-        c1m   =                 self.c1a(1)
-        c1e   =                 self.c1a(0)
+        _C =   [self.c1a(2), self.c1a(1), self.c1a(0),
+                self.c2a(2), self.c2a(1), self.c2a(0),
+                self.c3a(2), self.c3a(1), self.c3a(0)]
 
-        k       = np.real(self.k1)
+        _K      = [np.real(self.k1), np.real(self.k2), np.real(self.k3)]
+        _W      = [ 485e-10*self.MP/self.M1, 1.7e-10*self.MP/self.M1]
 
         self.evolEnd = False
 
@@ -304,20 +373,26 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         N1_eq_hot=1/(2*np.pi**2)*self.gN*self.inTh**3*besselLimit*V #initial RHN number density at temperature Th
 
+        N_eq_SM=1/(2*np.pi**2)*self.gN*self.inTsm**3*besselLimit*V #initial RHN number density at temperature Th
+
         nN_int = self.f*N1_eq_hot
+
+        n23_int = N_eq_SM
 
         self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.f*self.gN*self.inTh**4)
 
-        y0      = np.array([nN_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh, 0], dtype=np.complex128) #initial array
+        y0      = np.array([nN_int+0j,N_eq_SM+0j,N_eq_SM+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh], dtype=np.complex128) #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * self.inTsm**3
-        params  = np.array([nN_int, epstt,epsmm,epsee,epstm,epste,epsme,c1t,c1m,c1e,k,V], dtype=np.complex128)
+
+        #ys, _   = odeintw(self.RHS, y0, self.zs, args = tuple([_ETA, _C , _K, _W]), full_output=1)
+        params  = np.array([nN_int,V], dtype=np.complex128)
         
         lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
 
-        ys = odeintw(self.RHS, y0, lnsf, args = tuple(params)) #solves BEs
+        ys = odeintw(self.RHS, y0, lnsf, args = tuple([nN_int,V,_ETA, _C , _K, _W])) #solves BEs
 
-        T=np.abs(ys[:,7])
-        Th=np.abs(ys[:,8])
+        T=np.abs(ys[:,9])
+        Th=np.abs(ys[:,10])
 
         gstarSrec = self.ipol_gstarS(0.3e-9) # d.o.f. at recombination
         gstarSoff = self.ipol_gstarS(T[-1])  # d.o.f. at the end of leptogenesis
@@ -329,7 +404,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         Ngamma      = coeffNgamma*(np.exp(lnsf)*T)**3
         coeffsph    =  SMspl * gstarSrec/gstarSoff
 
-        NBL=np.real(ys[:,1]+ys[:,2]+ys[:,3])
+        NBL=np.real(ys[:,3]+ys[:,4]+ys[:,5])
 
         etab = coeffsph*NBL*nphi/Ngamma
 
@@ -339,10 +414,11 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
         d       = np.real(self.Gamma1* kn(1,zh) / kn(2,zh)) #decay rate thermal averaged with hot sector
 
-
         nH = ys[:,0]
 
         yH = np.amax(np.abs(np.transpose(self.h)[0]))
+
+        H = []
 
         eqBool = False
 
@@ -363,6 +439,8 @@ class EtaB_1DMEsf(ulysses.ULSBase):
             rho = rhoSM + rhoN
 
             Hubble = np.real(np.sqrt(rho/3.)/Mpl) #Hubble parameter
+
+            H.append(Hubble)
 
             leptogst = 3/4*2*6
 
@@ -385,6 +463,7 @@ class EtaB_1DMEsf(ulysses.ULSBase):
             
             if ((GammaScatt > Hubble) and (np.real(Th[i]/self.M1) > 1)):
                 eqBool = True
+
         
         if(eqBool):
             return -np.abs(etab[-1])

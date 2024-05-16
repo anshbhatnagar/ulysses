@@ -19,9 +19,6 @@ import ulysses.numba as nb
 from ulysses.ulsbase import my_kn2, my_kn1
 from odeintw import odeintw
 
-showLeptoPlot = False
-showTemps = False
-
 absErr = 5e-3 #absolute error for Ip, Jp, Kp and derivative integrals
 relErr  = 5e-4 #relative error for Ip, Jp, Kp and derivative integrals
 cutoff = 100 #cutoff at 'infinity' for Ip, Jp, Kp and derivative integrals
@@ -68,30 +65,6 @@ def Kp(x): #K+ function for pressure
 def dKpdx(x): #derivative of the K+ function
     integrand = lambda z:  -x*z**4*(1+np.exp(np.sqrt(np.abs(z**2+x**2)))*(1+np.sqrt(np.abs(z**2+x**2))))/(3*(1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2*np.sqrt(np.abs(z**2+x**2))**3)
     return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
-
-
-def showPlot(lnsf, ys, etab, Tsm, Th, nN_int, NBL, washout, source, Hubble):
-    if showLeptoPlot:
-        plt.plot(lnsf, Th/Tsm, color='r', label=r'$\kappa$')
-        plt.plot(lnsf, np.exp(3*lnsf)*np.real(ys[:,0])/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
-        plt.plot(lnsf, np.abs(etab)*1e8, color='b', label=r'$|\eta_B|\times 10^{8}$')
-        plt.plot(lnsf, np.abs(np.real(NBL))*1e8, label=r'$N_{B-L}\times 10^{8}$')
-        #plt.plot(Th, source/washout, label=r'$R_{eq}/R_D$')
-        #plt.plot(Th, washout, label=r'$R_D$')
-        #plt.plot(Th, Th/Th, label=r'$1$')
-        plt.ylim(0,2)
-        #plt.xlim(0,10**8)
-        
-    if showTemps:
-        plt.plot(lnsf, np.log10(Tsm), color='b', label=r'$T_{SM}$')
-        #plt.plot(lnsf, np.log10(np.real(ys[:,0])), color='g', label=r'$N_N$')
-        plt.plot(lnsf, np.log10(Th), color='r', label=r'$T_H$')
-    #plt.title("$\kappa(a=1)=1$, $\log_{10}(m_1)=-1$")
-    plt.xlabel(r"$\ln(a)$", fontsize=16)
-    plt.legend(loc='upper right', fontsize=16)
-    plt.grid()
-    #plt.ylabel(r"$N_N/N_N(a=1)$, $\kappa$, $|\eta_B|\times 10^{10}$",  fontsize=16)
-    plt.show()
 
 #@jit
 def fast_RHS(y0, lna, M1, Th, d, invd, w1, epstt, epsmm, epsee, epstm,epste,epsme,c1t,c1m,c1e, widtht, widthm, N1_eq_SM, nN_int, GCF, gN, gst, V):
@@ -350,11 +323,6 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         coeffsph    =  SMspl * gstarSrec/gstarSoff
 
         NBL=np.real(ys[:,1]+ys[:,2]+ys[:,3])
-        #self.ys = np.empty((len(T), 5))
-        #self.ys[:,0]=lnsf
-        #self.ys[:,1]=ys[:,0]
-        #self.ys[:,2]=ys[:,1]
-        #self.ys[:,3]=ys[:,2]
 
         etab = coeffsph*NBL*nphi/Ngamma
 
@@ -365,61 +333,6 @@ class EtaB_1DMEsf(ulysses.ULSBase):
         d       = np.real(self.Gamma1* kn(1,zh) / kn(2,zh)) #decay rate thermal averaged with hot sector
 
         nH = ys[:,0]
-
-        if showLeptoPlot^showTemps:
-
-            GammaTherm = []
-
-            yH = np.amax(np.abs(np.transpose(self.h)[0]))
-
-            Hubble = []
-
-            for i in range(0,100):
-                Mpl = np.sqrt(1/(8 * np.pi * self.GCF)) #planck mass
-
-                cut = 20
-
-                if zh[i] > cut:
-                    N1_eq_hot = self.gN*np.real(V)*(self.M1*Th[i]/(2*np.pi))**(3/2)*np.exp(-zh[i])
-                else:
-                    N1_eq_hot = self.gN*np.real(V)*Ipp(Th[i],zh[i])/(2*np.pi**2)
-
-                f = nH[i]/N1_eq_hot
-
-                rhoN = self.gN/(2*np.pi**2)*Th[i]**4*f*Jp(zh[i])
-                rhoSM = np.pi**2/30.*self.ipol_gstar(T[i])*T[i]**4
-                rho = rhoSM + rhoN
-
-                Hub=np.sqrt(rho/3.)/Mpl
-
-                Hubble.append(Hub) #Hubble parameter
-
-                gLeptst = 3/4*2*6
-
-                nSM = zeta3/(np.pi**2)*gLeptst*T[i]**3
-
-                d[i] = d[i]*np.real(nH[i]/V)
-
-                GammaTherm.append(self.sv(Th[i],125,self.M1,yH)*nSM*nH[i]/np.real(V))
-            
-            GammaTherm = np.array(GammaTherm)
-            Hubble = np.array(Hubble)
-            GammaTherm = GammaTherm/(Hubble**3)
-            d = d/(Hubble**3)
-
-            invd = np.real(self.Gamma1* kn(1,zsm) / kn(2,zsm)) #decay rate thermal averaged with SM
-            invd[np.isnan(invd)] = 0
-            w=invd * 0.25 * kn(2,zsm) * zsm**2
-
-            eps=(epstt + epsmm + epsee)
-
-            neq=3/8*zsm**2*kn(2,zsm)
-
-            washout= np.abs(w * NBL)
-            
-            source=np.abs(eps *(-ys[:,0]*d +  neq*invd))
-
-            showPlot(lnsf, ys, etab, T, Th, nN_int, NBL, d, GammaTherm, Hubble)
 
         yH = np.amax(np.abs(np.transpose(self.h)[0]))
 
@@ -447,11 +360,22 @@ class EtaB_1DMEsf(ulysses.ULSBase):
 
             nSM = np.real(zeta3/(np.pi**2)*leptogst*T[i]**3)
 
+            l         = self.h
+            ldag      = np.conjugate(np.transpose(l))
+            lcon      = np.conjugate(l)
+            M         = self.DM
+            lsquare   = np.dot(ldag,l)
+
+            GammaScatt = np.abs(5*10.**(-3.)*lsquare[0,0]*Th[i])
+
             n = nH[i]
 
             GammaTherm = np.real(self.sv(np.real(Th[i]),125,self.M1,yH)*nSM)
 
             if ((GammaTherm > d[i]) and (GammaTherm > Hubble) and (np.real(Th[i]/self.M1) > 0.1)):
+                eqBool = True
+            
+            if ((GammaScatt > Hubble) and (np.real(Th[i]/self.M1) > 1)):
                 eqBool = True
         
         if(eqBool):
