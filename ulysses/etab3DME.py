@@ -2,6 +2,7 @@
 import ulysses
 import numpy as np
 from odeintw import odeintw
+from scipy.special import zeta
 
 from ulysses.numba import jit
 @jit
@@ -140,7 +141,19 @@ class EtaB_3DME(ulysses.ULSBase):
         _K      = [np.real(self.k1), np.real(self.k2), np.real(self.k3)]
         _W      = [ 485e-10*self.MP/self.M1, 1.7e-10*self.MP/self.M1]
 
-        y0      = np.array([0+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j], dtype=np.complex128)
+        Tsm = self.M1/self.zs[0]
+
+        ggamma      = 2.
+
+        V = np.pi**2/(Tsm**3*zeta(3)*ggamma) #volume factor to normalise the number density, keeping it consistent with the equilibrium number density
+
+        besselLimit = 2 # limit of z^2 K_2(z) as z-> 0
+
+        gN = 2.
+
+        N1_eq=1/(2*np.pi**2)*gN*Tsm**3*besselLimit*V #initial RHN number density at temperature Th
+
+        y0      = np.array([N1_eq+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j], dtype=np.complex128)
 
         ys, _   = odeintw(self.RHS, y0, self.zs, args = tuple([_ETA, _C , _K, _W]), full_output=1)
         self.setEvolData(ys)

@@ -284,13 +284,21 @@ class EtaB_3DMEsf(ulysses.ULSBase):
         self._d1       = np.real(self.Gamma1* my_kn1(zh) / my_kn2(zh)) #decay rate thermal averaged with hot sector
         self._invd1 = np.real(self.Gamma1* my_kn1(zsm) / my_kn2(zsm)) #decay rate thermal averaged with SM
         self._w1      = self._invd1 * 0.25 * my_kn2(zsm) * zsm**2 #washout rate
-        self._d2      = np.real(self.D2(k2term, zsm))
-        self._w2      = np.real(self.W2(k2term, zsm))
-        self._d3      = np.real(self.D3(k3term, zsm))
-        self._w3      = np.real(self.W3(k3term, zsm))
+        # self._d2      = np.real(self.D2(k2term, zsm))
+        # self._w2      = np.real(self.W2(k2term, zsm))
+        # self._d3      = np.real(self.D3(k3term, zsm))
+        # self._w3      = np.real(self.W3(k3term, zsm))
         self._n1eq    = self.N1Eq(zsm)
         self._n2eq    = self.N2Eq(zsm)
         self._n3eq    = self.N3Eq(zsm)
+
+        zsm2 = self.M2/self.M1*zsm
+        self._d2       = np.real(self.Gamma2* my_kn1(zsm2) / my_kn2(zsm2)) #decay rate thermal averaged with SM sector
+        self._w2      = self._d2 * 0.25 * my_kn2(zsm2) * zsm2**2 #washout rate
+
+        zsm3 = self.M3/self.M1*zsm
+        self._d3       = np.real(self.Gamma3* my_kn1(zsm3) / my_kn2(zsm3)) #decay rate thermal averaged with SM sector
+        self._w3       = self._d3 * 0.25 * my_kn2(zsm3) * zsm3**2 #washout rate
 
 
         if(np.log10(np.exp(3*lna)*np.real(N1)/nN_int) < -6):
@@ -377,11 +385,11 @@ class EtaB_3DMEsf(ulysses.ULSBase):
 
         nN_int = self.f*N1_eq_hot
 
-        n23_int = N_eq_SM
+        n23_int = 0
 
         self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.f*self.gN*self.inTh**4)
 
-        y0      = np.array([nN_int+0j,N_eq_SM+0j,N_eq_SM+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh], dtype=np.complex128) #initial array
+        y0      = np.array([nN_int+0j,n23_int+0j,n23_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh], dtype=np.complex128) #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * self.inTsm**3
 
         #ys, _   = odeintw(self.RHS, y0, self.zs, args = tuple([_ETA, _C , _K, _W]), full_output=1)
@@ -404,7 +412,7 @@ class EtaB_3DMEsf(ulysses.ULSBase):
         Ngamma      = coeffNgamma*(np.exp(lnsf)*T)**3
         coeffsph    =  SMspl * gstarSrec/gstarSoff
 
-        NBL=np.real(ys[:,3]+ys[:,4]+ys[:,5])
+        NBL=np.abs(ys[:,3]+ys[:,4]+ys[:,5])
 
         etab = coeffsph*NBL*nphi/Ngamma
 
@@ -463,6 +471,16 @@ class EtaB_3DMEsf(ulysses.ULSBase):
             
             if ((GammaScatt > Hubble) and (np.real(Th[i]/self.M1) > 1)):
                 eqBool = True
+
+        plt.plot(lnsf,np.log(Th))
+        plt.plot(lnsf,np.log(T))
+        plt.show()
+
+        plt.plot(lnsf,Th/T)
+        plt.plot(lnsf,np.exp(3*lnsf)*nH/nN_int)
+        plt.plot(lnsf,etab*1e9)
+        plt.show()
+
 
         
         if(eqBool):
