@@ -471,17 +471,6 @@ class EtaB_3DMEsf(ulysses.ULSBase):
             
             if ((GammaScatt > Hubble) and (np.real(Th[i]/self.M1) > 1)):
                 eqBool = True
-
-        plt.plot(lnsf,np.log(Th))
-        plt.plot(lnsf,np.log(T))
-        plt.show()
-
-        plt.plot(lnsf,Th/T)
-        plt.plot(lnsf,np.exp(3*lnsf)*nH/nN_int)
-        plt.plot(lnsf,etab*1e9)
-        plt.show()
-
-
         
         if(eqBool):
             return -np.abs(etab[-1])
