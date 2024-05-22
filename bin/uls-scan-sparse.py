@@ -119,8 +119,6 @@ if __name__=="__main__":
         tempFIX["x3"] = x3
         tempFIX["y3"] = y3
 
-        print(FIX)
-
         try:
             etaB = LEPTO(FIX)
         except:
@@ -136,7 +134,9 @@ if __name__=="__main__":
 
     for i in range(opts.NSCAN):
         if results[i][6] > 5.8*10**(-10):
-            DATA.append([(results[i]) for i in range(opts.NSCAN)])
+            DATA.append([(results[i][j]) for j in range(7)])
+
+    print(DATA)
 
     if opts.OUTPUT is not None:
         if opts.OUTPUT.endswith(".txt"):

@@ -471,6 +471,14 @@ class EtaB_3DMEsf(ulysses.ULSBase):
             
             if ((GammaScatt > Hubble) and (np.real(Th[i]/self.M1) > 1)):
                 eqBool = True
+
+        # plt.plot(lnsf, Th/T, color='r', label=r'$\kappa$')
+        # plt.plot(lnsf, np.exp(3*lnsf)*nH/nN_int, color='g', label=r'$N_N/N_N(a=1)$')
+        # plt.plot(lnsf, np.abs(etab)*1e10, color='b', label=r'$|\eta_B|\times 10^{10}$')
+        # plt.xlabel(r"$\ln(a)$", fontsize=16)
+        # plt.legend(loc='upper right', fontsize=16)
+        # #plt.ylabel(r"$N_N/N_N(a=1)$, $\kappa$, $|\eta_B|\times 10^{10}$",  fontsize=16)
+        # plt.show()
         
         if(eqBool):
             return -np.abs(etab[-1])
