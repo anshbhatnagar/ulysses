@@ -173,6 +173,13 @@ if __name__=="__main__":
 
         tempFIX[pxscan] = px
         tempFIX[pyscan] = py
+
+        if pxscan == "M1":
+            M2spl = 0.015
+            M3spl = 0.4
+            tempFIX["M2"] = px + M2spl
+            tempFIX["M3"] = px + M3spl
+            
         try:
             etaB = LEPTO(FIX)
         except:

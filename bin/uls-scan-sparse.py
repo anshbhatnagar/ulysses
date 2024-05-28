@@ -105,12 +105,12 @@ if __name__=="__main__":
     def genData(i):
         tempFIX = FIX
 
-        x1 = random.randint(0,180)
-        y1 = random.randint(0,180)
-        x2 = random.randint(0,180)
-        y2 = random.randint(0,180)
-        x3 = random.randint(0,180)
-        y3 = random.randint(0,180)
+        x1 = random.uniform(0,12)
+        y1 = random.uniform(0,12)
+        x2 = random.uniform(0,12)
+        y2 = random.uniform(0,12)
+        x3 = random.uniform(0,12)
+        y3 = random.uniform(0,12)
 
         tempFIX["x1"] = x1
         tempFIX["y1"] = y1

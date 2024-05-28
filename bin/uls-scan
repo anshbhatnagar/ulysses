@@ -30,12 +30,12 @@ t23    49.58  # [deg]
 
 def plotEtaB(data, f_out, pname):
     import pylab
-    pylab.plot(data[:,0], np.log10(np.abs(data[:,1])))
+    pylab.plot(data[:,0], np.abs(data[:,1]))
     if pname == "kappa":
         pylab.xlabel("$\kappa$")
     else:
         pylab.xlabel(pname)
-    pylab.ylabel("$\log_{{10}}(|\eta_B|)$")
+    pylab.ylabel("$|\eta_B|$")
     pylab.tight_layout()
     pylab.savefig(f_out)
 

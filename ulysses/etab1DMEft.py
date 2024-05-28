@@ -74,6 +74,6 @@ class EtaB_1DME(ulysses.ULSBase):
             m_loop_sum += m_loop[i]
             m_tot_sum += m_tot[i]
 
-        ft = np.abs(m_loop_sum/m_tot_sum)
+        ft = np.abs(m_tot_sum/m_loop_sum)
 
         return ft

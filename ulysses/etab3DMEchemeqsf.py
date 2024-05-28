@@ -60,8 +60,8 @@ def dKpdx(x): #derivative of the K+ function
     return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
 
 #@jit
-def fast_RHS(y0,lna,M1,M2,M3,gst,gN,GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W, d1,invd1,d2,d3,w1,w2,w3,n1eq,n2eq,n3eq):
-    N1, N2, N3, Ntt, Nmm, Nee, Ntm, Nte, Nme, Tsm, Th = y0
+def fast_RHS(y0,lna,M1,M2,M3,Th,gst,gN,GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W, d1,invd1,d2,d3,w1,w2,w3,n1eq,n2eq,n3eq):
+    N1, N2, N3, Ntt, Nmm, Nee, Ntm, Nte, Nme, Tsm = y0
 
     Tsm = np.abs(Tsm)
     Th = np.abs(Th)
@@ -199,9 +199,7 @@ def fast_RHS(y0,lna,M1,M2,M3,gst,gN,GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps
 
     dTsmdlna = (np.exp(-3*lna)*dQdlna-3*sSM*Tsm)/denomSM #SM temperature derivative from second law of thermodynamics
 
-    dThdlna = (np.exp(-3*lna)*dQdlna - 3*(rhoSM+pSM) - drhoSMdTsm*dTsmdlna + dN1dlna*pN/N1)/(pN/N1_eq_hot*dN1_eq_hotdTh+sN-dpNdTh) #hot sector temp derivative via second law + comoving energy conservation
-
-    return [dN1dlna, dN2dlna, dN3dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna, dThdlna]
+    return [dN1dlna, dN2dlna, dN3dlna, dNttdlna, dNmmdlna, dNeedlna, dNtmdlna, dNtedlna, dNmedlna, dTsmdlna]
 
 
 class EtaB_3DMEsf(ulysses.ULSBase):
@@ -244,6 +242,16 @@ class EtaB_3DMEsf(ulysses.ULSBase):
     def flavourindices(self): return [3, 4, 5]
     def flavourlabels(self): return ["$N_{\\tau\\tau}$", "$N_{\mu\mu}$", "$N_{ee}$"]
 
+    def calculateTemp(self, N1, lna, Tsm, nN_int, V):
+
+        if self.kappa**3*np.abs(N1)/(nN_int)<10**(-7): #checks if number density is too small to use the inversion
+            Th = Tsm #set Th to Tsm as sectors have equilibrated (Th is meaningless at this point anyway and doesn't affect results)
+        else:
+            x=2*np.pi**2*np.abs(N1)/(self.gN*np.real(V)) #parameter for inversion
+            Th = invIpp(x, self.M1, self.inTsm*np.exp(-lna))
+        
+        return Th
+
     def sigma(self, s,mH,mN,yH):
         hDiff = mH**2-s
         hSum = mH**2+s
@@ -262,10 +270,10 @@ class EtaB_3DMEsf(ulysses.ULSBase):
         return quad(integrand, mN**2, cutoff*mN**2,epsabs=absErr, epsrel = relErr)[0]
 
     def RHS(self, y0, lna, nN_int, V, ETA, _C, K, _W):
-        N1, N2, N3, Ntt, Nmm, Nee, Ntm, Nte, Nme, Tsm, Th = y0
+        N1, N2, N3, Ntt, Nmm, Nee, Ntm, Nte, Nme, Tsm = y0
 
         Tsm = np.abs(Tsm)
-        Th = np.abs(Th)
+        Th = self.calculateTemp(N1, lna, Tsm, nN_int, V)
 
         zh=self.M1/Th
         zsm=self.M1/Tsm
@@ -305,9 +313,9 @@ class EtaB_3DMEsf(ulysses.ULSBase):
             self.evolEnd = True
 
         if self.evolEnd:
-            return [-3*np.abs(N1), 0, 0, 0, 0, 0, 0, 0, 0, -Tsm, -Th]
+            return [-3*np.abs(N1), 0, 0, 0, 0, 0, 0, 0, 0, -Tsm]
         else:
-            return fast_RHS(y0,lna,self.M1,self.M2,self.M3,self.ipol_gstar(Tsm),self.gN,self.GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W,
+            return fast_RHS(y0,lna,self.M1,self.M2,self.M3,Th,self.ipol_gstar(Tsm),self.gN,self.GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W,
                 self._d1,self._invd1,self._d2,self._d3,self._w1,self._w2,self._w3,self._n1eq,self._n2eq,self._n3eq)
 
     def __call__(self, x):
@@ -389,7 +397,7 @@ class EtaB_3DMEsf(ulysses.ULSBase):
 
         self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.f*self.gN*self.inTh**4)
 
-        y0      = np.array([nN_int+0j,n23_int+0j,n23_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh], dtype=np.complex128) #initial array
+        y0      = np.array([nN_int+0j,n23_int+0j,n23_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm], dtype=np.complex128) #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * self.inTsm**3
 
         #ys, _   = odeintw(self.RHS, y0, self.zs, args = tuple([_ETA, _C , _K, _W]), full_output=1)
@@ -400,7 +408,16 @@ class EtaB_3DMEsf(ulysses.ULSBase):
         ys = odeintw(self.RHS, y0, lnsf, args = tuple([nN_int,V,_ETA, _C , _K, _W])) #solves BEs
 
         T=np.abs(ys[:,9])
-        Th=np.abs(ys[:,10])
+        Th=[]
+        
+        for i in range(0,100):
+            N1=ys[i][0]
+            lna = lnsf[i]
+            Tsm = T[i]
+            hotTemp = self.calculateTemp(N1, lna, Tsm, nN_int, V)
+            Th.append(hotTemp)
+
+        Th = np.array(Th)
 
         gstarSrec = self.ipol_gstarS(0.3e-9) # d.o.f. at recombination
         gstarSoff = self.ipol_gstarS(T[-1])  # d.o.f. at the end of leptogenesis
