@@ -402,15 +402,17 @@ class EtaB_3DMEsf(ulysses.ULSBase):
 
         #ys, _   = odeintw(self.RHS, y0, self.zs, args = tuple([_ETA, _C , _K, _W]), full_output=1)
         params  = np.array([nN_int,V], dtype=np.complex128)
+
+        lnsfdiv = 200
         
-        lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
+        lnsf = np.linspace(lnain, lnaf, num=lnsfdiv, endpoint=True)
 
         ys = odeintw(self.RHS, y0, lnsf, args = tuple([nN_int,V,_ETA, _C , _K, _W])) #solves BEs
 
         T=np.abs(ys[:,9])
         Th=[]
         
-        for i in range(0,100):
+        for i in range(0,lnsfdiv):
             N1=ys[i][0]
             lna = lnsf[i]
             Tsm = T[i]
@@ -447,7 +449,7 @@ class EtaB_3DMEsf(ulysses.ULSBase):
 
         eqBool = False
 
-        for i in range(0,100):
+        for i in range(0,lnsfdiv):
             Mpl = np.sqrt(1/(8 * np.pi * self.GCF)) #planck mass
 
             cut = 20
