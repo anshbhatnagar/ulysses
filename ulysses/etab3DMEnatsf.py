@@ -47,6 +47,10 @@ def Jp(x): #J+ function for energy density
     integrand = lambda z: z**2*np.sqrt(np.abs(z**2+x**2))/(1+np.exp(np.sqrt(np.abs(z**2+x**2))))
     return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
 
+def Jm(x): #J- function for energy density
+    integrand = lambda z: z**2*np.sqrt(np.abs(z**2+x**2))/(np.exp(np.sqrt(np.abs(z**2+x**2)))-1)
+    return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
+
 def dJpdx(x): #derivative of the J+ function
     integrand = lambda z: -x*z**2*(-1+np.exp(np.sqrt(np.abs(z**2+x**2)))*(-1+np.sqrt(np.abs(z**2+x**2))))/((1+np.exp(np.sqrt(np.abs(z**2+x**2))))**2*np.sqrt(np.abs(z**2+x**2)))
     return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
@@ -60,7 +64,7 @@ def dKpdx(x): #derivative of the K+ function
     return quad(integrand, 0, cutoff, epsabs=absErr, epsrel = relErr)[0]
 
 #@jit
-def fast_RHS(y0,lna,M1,M2,M3,gst,gN,GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W, d1,invd1,d2,d3,w1,w2,w3,n1eq,n2eq,n3eq):
+def fast_RHS(y0,lna,M1,M2,M3,mPhi,gst,gN,GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W, d1,invd1,d2,d3,w1,w2,w3,n1eq,n2eq,n3eq):
     N1, N2, N3, Ntt, Nmm, Nee, Ntm, Nte, Nme, Tsm, Th = y0
 
     Tsm = np.abs(Tsm)
@@ -136,8 +140,10 @@ def fast_RHS(y0,lna,M1,M2,M3,gst,gN,GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps
     sSM=(rhoSM+pSM)/Tsm
     dsSMdTsm = (drhoSMdTsm+dpSMdTsm-sSM)/Tsm
 
+    rhoPhi = 1./(2*np.pi**2)*Th**4*Jm(mPhi/Th)
+
     #set total energy density, pressure and entropy density for SM
-    rho = rhoSM + rhoN
+    rho = rhoSM + rhoN + rhoPhi
 
     p = pSM + pN
 
@@ -307,7 +313,7 @@ class EtaB_3DMEsf(ulysses.ULSBase):
         if self.evolEnd:
             return [-3*np.abs(N1), 0, 0, 0, 0, 0, 0, 0, 0, -Tsm, -Th]
         else:
-            return fast_RHS(y0,lna,self.M1,self.M2,self.M3,self.ipol_gstar(Tsm),self.gN,self.GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W,
+            return fast_RHS(y0,lna,self.M1,self.M2,self.M3,self.mPhi,self.ipol_gstar(Tsm),self.gN,self.GCF,V,eps1tt,eps1mm,eps1ee,eps1tm,eps1te,eps1me,eps2tt,eps2mm,eps2ee,eps2tm,eps2te,eps2me,eps3tt,eps3mm,eps3ee,eps3tm,eps3te,eps3me, C, W,
                 self._d1,self._invd1,self._d2,self._d3,self._w1,self._w2,self._w3,self._n1eq,self._n2eq,self._n3eq)
 
     def __call__(self, x):
@@ -357,7 +363,11 @@ class EtaB_3DMEsf(ulysses.ULSBase):
         _K      = [np.real(self.k1), np.real(self.k2), np.real(self.k3)]
         _W      = [ 485e-10*self.MP/self.M1, 1.7e-10*self.MP/self.M1]
 
+        self.mPhi = 2*self.M1
+
         self.evolEnd = False
+
+        lnsfdiv = 200
 
         self.f=1
 
@@ -387,7 +397,7 @@ class EtaB_3DMEsf(ulysses.ULSBase):
 
         n23_int = 0
 
-        self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(7./8.)*self.f*self.gN*self.inTh**4)
+        self.rho_in=np.pi**2/30.*(self.ipol_gstar(self.inTsm)*self.inTsm**4+(1+(7./8.)*self.f*self.gN)*self.inTh**4)
 
         y0      = np.array([nN_int+0j,n23_int+0j,n23_int+0j,0+0j,0+0j,0+0j,0+0j,0+0j,0+0j, self.inTsm, self.inTh], dtype=np.complex128) #initial array
         nphi    = (2.*zeta(3)/np.pi**2) * self.inTsm**3
@@ -395,7 +405,7 @@ class EtaB_3DMEsf(ulysses.ULSBase):
         #ys, _   = odeintw(self.RHS, y0, self.zs, args = tuple([_ETA, _C , _K, _W]), full_output=1)
         params  = np.array([nN_int,V], dtype=np.complex128)
         
-        lnsf = np.linspace(lnain, lnaf, num=100, endpoint=True)
+        lnsf = np.linspace(lnain, lnaf, num=lnsfdiv, endpoint=True)
 
         ys = odeintw(self.RHS, y0, lnsf, args = tuple([nN_int,V,_ETA, _C , _K, _W])) #solves BEs
 
@@ -430,7 +440,7 @@ class EtaB_3DMEsf(ulysses.ULSBase):
 
         eqBool = False
 
-        for i in range(0,100):
+        for i in range(0,lnsfdiv):
             Mpl = np.sqrt(1/(8 * np.pi * self.GCF)) #planck mass
 
             cut = 20
@@ -472,18 +482,18 @@ class EtaB_3DMEsf(ulysses.ULSBase):
             if ((GammaScatt > Hubble) and (np.real(Th[i]/self.M1) > 1)):
                 eqBool = True
         
-        # obsEtaBu = 6.3*10.**(-10)
-        # obsEtaBd = 5.8*10.**(-10)
+        # obsEtaBu = 6.3
+        # obsEtaBd = 5.8
 
-        # from matplotlib.ticker import AutoMinorLocator
+        # # from matplotlib.ticker import AutoMinorLocator
 
+        # plt.rcParams["font.size"] = 14
 
         # fig, ax = plt.subplots(constrained_layout=True)
         # ax.plot(lnsf, Th/T, color='r', label=r'$\kappa$')
-        # ax.plot(lnsf, np.exp(3*lnsf)*nH/nN_int, color='g', label=r'$N_{{N_1}}/N_{{N_1}}(a=1)$')
-        # ax.plot(lnsf, np.abs(etab)*1e10, color='b', label=r'$|\eta_B|\times 10^{10}$')
-        # ax.plot(lnsf, obsEtaBu*1e10*np.ones_like(lnsf), color='g', linestyle = 'dashed', label=r'$\eta_B^{{\rm obs}}$')
-        # ax.plot(lnsf, obsEtaBd*1e10*np.ones_like(lnsf), color='g', linestyle = 'dashed')
+        # ax.plot(lnsf, np.exp(3*lnsf)*nH/nN_int, color='b', label=r'$N_{{N_1}}/N_{{N_1}}(a=1)$')
+        # ax.plot(lnsf, np.abs(etab)*1e10, color='g', label=r'$|\eta_B|\times 10^{10}$')
+        # ax.fill_between(lnsf, obsEtaBd, obsEtaBu, alpha=0.5, color = 'g', label=r'$\eta_B^{{\rm obs}}$')
         # ax.set_xlabel(r"$\ln(a)$", fontsize=16)
         # ax2 = ax.secondary_xaxis("top", functions=(lambda x : np.interp(x,lnsf,np.log10(T)),lambda y : np.interp(y,np.log10(T)[::-1],lnsf[::-1])))
         # ax2.set_xlabel(r"$\log_{{10}}(T_{{\rm SM}})$", fontsize=16)
